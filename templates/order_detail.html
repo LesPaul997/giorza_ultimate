@@ -1,0 +1,2283 @@
+{% extends "base.html" %}
+
+{% block title %}Ordine {{ seriale }}{% endblock %}
+
+{% block content %}
+<!-- Stili per migliore esperienza touch su tablet -->
+<style>
+  /* Stili per migliore esperienza touch su tablet */
+  @media (pointer: coarse) {
+    .labelCheckbox, input[type="checkbox"], input[type="radio"] {
+      min-width: 24px;
+      min-height: 24px;
+    }
+    
+    .cursor-pointer {
+      cursor: pointer;
+    }
+    
+    /* Area di tocco più grande per i bottoni */
+    button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+  
+  /* Feedback visivo per clic */
+  .row-clickable:active {
+    background-color: #dbeafe !important;
+    border-color: #3b82f6 !important;
+    transform: scale(0.98);
+  }
+  
+  /* Miglioramenti per touch */
+  .touch-friendly {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Hover effects per tablet */
+  @media (hover: hover) {
+    .hover\:bg-gray-50:hover {
+      background-color: #f9fafb;
+    }
+  }
+</style>
+
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <h1 class="text-2xl lg:text-3xl font-bold text-gray-900 break-words">{{ customer }}</h1>
+        
+        <!-- Ritiro Info -->
+        {% if lines[0].ritiro and lines[0].ritiro.strip() %}
+        <div class="mt-3 mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+          <div class="flex items-center">
+            {% if 'ritiro' in lines[0].ritiro.lower() %}
+              <span class="text-lg mr-2">📦</span>
+            {% elif 'consegna' in lines[0].ritiro.lower() %}
+              <span class="text-lg mr-2">🚚</span>
+            {% else %}
+              <span class="text-lg mr-2">📋</span>
+            {% endif %}
+            <span class="text-sm font-medium text-orange-800">{{ lines[0].ritiro }}</span>
+          </div>
+        </div>
+        {% endif %}
+
+        
+        
+        <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mt-2 text-sm text-gray-600">
+          <span><strong>Numero:</strong> {{ numero }}</span>
+          <span><strong>Data:</strong> {{ date }}</span>
+          <span><strong>Seriale:</strong> {{ seriale }}</span>
+          {% if user_reparto and reparto_nome %}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+            {{ reparto_nome }}
+          </span>
+          {% endif %}
+          {% if current_user.role == 'cassiere' or current_user.role == 'cassa' %}
+          <span id="orderNotesBadge" class="hidden inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Note presenti <span id="orderNotesCount" class="ml-1 font-semibold">0</span>
+          </span>
+          {% endif %}
+        </div>
+    </div>
+      <div class="flex items-center space-x-3">
+      {% if current_user.role == 'picker' %}
+      <button
+          onclick="openLabelPrintModal()"
+          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+        >
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+          </svg>
+          Stampa
+      </button>
+      {% endif %}
+      
+                              {% if current_user.role == 'cassiere' or current_user.role == 'cassa' %}
+            <div class="flex items-center space-x-2">
+              <a href="/ordine/{{ seriale }}/print" target="_blank" 
+                 class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                Stampa
+              </a>
+            </div>
+            {% endif %}
+      </div>
+    </div>
+
+    <!-- Status Buttons for Picker - SEZIONE STATO ORA IN ALTO, PRIMA DELLE RIGHE PARZIALI -->
+    {% if current_user.role == 'picker' %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">Stato Ordine</h2>
+        <p class="text-sm text-gray-500 mt-1">Aggiorna lo stato dell'ordine</p>
+      </div>
+      
+      <div class="p-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
+          {% if not in_da_completare %}
+          <!-- Materiale Non Disponibile -->
+          <form method="post" action="{{ url_for('update_order_status', seriale=seriale) }}" class="flex">
+            <input type="hidden" name="status" value="materiale_non_disponibile">
+            <button type="button" onclick="openUnavailableModal()" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 lg:py-3 px-3 lg:px-4 rounded-lg transition-colors duration-200 flex items-center justify-center text-xs lg:text-sm">
+              <svg class="w-4 h-4 lg:w-5 lg:h-5 mr-1 lg:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+              </svg>
+              <span class="hidden sm:inline">Materiale Non Disponibile</span>
+              <span class="sm:hidden">Non Disponibile</span>
+            </button>
+          </form>
+          {% endif %}
+
+          <!-- Ordine in Preparazione -->
+          <form method="post" action="{{ url_for('update_order_status', seriale=seriale) }}" class="flex">
+            <input type="hidden" name="status" value="in_preparazione">
+            <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 lg:py-3 px-3 lg:px-4 rounded-lg transition-colors duration-200 flex items-center justify-center text-xs lg:text-sm">
+              <svg class="w-4 h-4 lg:w-5 lg:h-5 mr-1 lg:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span class="hidden sm:inline">Iniziare Preparazione</span>
+              <span class="sm:hidden">Preparazione</span>
+            </button>
+          </form>
+
+          <!-- Da completare (manuale) -->
+          <form method="post" action="{{ url_for('add_to_ordini_da_completare', seriale=seriale) }}" class="flex">
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 lg:py-3 px-3 lg:px-4 rounded-lg transition-colors duration-200 flex items-center justify-center text-xs lg:text-sm">
+              <svg class="w-4 h-4 lg:w-5 lg:h-5 mr-1 lg:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M4 6h16M4 18h16"></path>
+              </svg>
+              <span class="hidden sm:inline">Da completare</span>
+              <span class="sm:hidden">Completa</span>
+            </button>
+          </form>
+
+          <!-- Ordine Pronto -->
+          <form method="post" action="{{ url_for('update_order_status', seriale=seriale) }}" class="flex">
+            <input type="hidden" name="status" value="pronto">
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 lg:py-3 px-3 lg:px-4 rounded-lg transition-colors duration-200 flex items-center justify-center text-xs lg:text-sm">
+              <svg class="w-4 h-4 lg:w-5 lg:h-5 mr-1 lg:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span class="hidden sm:inline">Completare Ordine</span>
+              <span class="sm:hidden">Completato</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Current Status Display -->
+        {% if order_status %}
+        <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="text-sm font-medium text-gray-900">
+              Stato attuale: 
+              {% if order_status == 'nuovo' %}
+                <span class="text-gray-600">Nuovo</span>
+              {% elif order_status == 'letto' %}
+                <span class="text-blue-600">Ordine Letto</span>
+              {% elif order_status == 'materiale_non_disponibile' %}
+                <span class="text-red-600">Materiale Non Disponibile</span>
+              {% elif order_status == 'in_preparazione' %}
+                <span class="text-yellow-600">In Preparazione</span>
+              {% elif order_status == 'pronto' %}
+                <span class="text-green-600">Pronto</span>
+              {% endif %}
+            </span>
+          </div>
+        </div>
+        {% endif %}
+        
+        <!-- Status by Reparto Display -->
+        {% if status_by_reparto and reparti_ordine %}
+        <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="flex items-center mb-3">
+            <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+            <span class="text-sm font-medium text-blue-900">Stato per Reparto</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {% for reparto in reparti_ordine %}
+              {% set reparto_status = status_by_reparto.get(reparto, {}) %}
+              {% set status = reparto_status.get('status', 'nuovo') %}
+              {% set operatore = reparto_status.get('operatore', '') %}
+              <div class="flex items-center justify-between p-2 bg-white rounded border">
+                <div class="flex items-center">
+                  <span class="text-xs font-medium text-gray-700 mr-2">{{ reparto }}</span>
+                  {% if status == 'nuovo' %}
+                    <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">Nuovo</span>
+                  {% elif status == 'letto' %}
+                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded">Letto</span>
+                  {% elif status == 'materiale_non_disponibile' %}
+                    <span class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded">Non Disponibile</span>
+                  {% elif status == 'in_preparazione' %}
+                    <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-600 rounded">In Preparazione</span>
+                  {% elif status == 'pronto' %}
+                    <span class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded">Pronto</span>
+                  {% endif %}
+                </div>
+                {% if operatore %}
+                  <span class="text-xs text-gray-500">{{ operatore }}</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if partial_view %}
+    <!-- Sezione Evasione Parziale (sotto lo stato) -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-lg font-semibold text-blue-900">⏳ Righe da evadere</h2>
+      {% if residual_lines %}
+      <div class="mt-4 space-y-3">
+        {% for r in residual_lines %}
+        <div class="p-4 rounded-lg border border-yellow-200 bg-yellow-50">
+          <div class="font-medium text-gray-900">{{ r.descrizione_articolo }}</div>
+          <div class="text-xs text-gray-600 font-mono">{{ r.codice_articolo }}</div>
+          <div class="mt-2 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div class="md:col-span-3">
+              <label class="block text-xs text-gray-600 mb-1">Quantità</label>
+              <input type="number" step="0.1" value="{{ '%.2f'|format(r.quantita) }}" id="qty-{{ r.codice_articolo }}" class="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs text-gray-600 mb-1">U.M.</label>
+              <input type="text" value="{{ r.unita_misura }}" id="um-{{ r.codice_articolo }}" class="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" />
+            </div>
+            <div class="md:col-span-5">
+              <label class="block text-xs text-gray-600 mb-1">Nota</label>
+              <input type="text" placeholder="Aggiungi una nota..." id="note-{{ r.codice_articolo }}" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div class="md:col-span-2 flex space-x-2">
+              <button type="button" class="px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700" onclick="evadiResiduo('{{ r.codice_articolo }}')">Evadi</button>
+              <button type="button" class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" onclick="salvaNotaResiduo('{{ r.codice_articolo }}')">Nota</button>
+            </div>
+          </div>
+          <p class="mt-1 text-xs text-gray-500">Residuo massimo: {{ '%.2f'|format(r.quantita) }} {{ r.unita_misura }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-500 mt-2">Nessun residuo per questo reparto.</p>
+      {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-lg font-semibold text-green-900">✅ Righe evase</h2>
+      {% if delivered_lines %}
+      <div class="mt-4 space-y-2">
+        {% for r in delivered_lines %}
+        <div class="p-4 rounded-lg border border-green-200 bg-green-50">
+          <div class="font-medium text-gray-900">{{ r.descrizione_articolo }}</div>
+          <div class="text-xs text-gray-600 font-mono">{{ r.codice_articolo }}</div>
+          <div class="text-sm text-gray-800">Consegnato: <span class="font-semibold">{{ '%.2f'|format(r.quantita) }} {{ r.unita_misura }}</span></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-500 mt-2">Ancora nessuna movimentazione registrata.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Order Details - Layout per Tablet (uno sopra l'altro) -->
+    <div class="space-y-6">
+      <!-- Original Lines - Blocco Superiore (ENFATIZZATO) -->
+      {% if not partial_view %}
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-blue-200 bg-blue-100">
+          <h2 class="text-xl font-bold text-blue-900">📋 Righe Ordine</h2>
+          <p class="text-sm text-blue-700 mt-1">Articoli richiesti dal cliente</p>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-blue-200">
+            <thead class="bg-blue-100">
+              <tr>
+                <th class="px-3 lg:px-6 py-4 text-left text-xs lg:text-sm font-bold text-blue-900 uppercase tracking-wider">
+                  Articolo
+                </th>
+                <th class="px-3 lg:px-6 py-4 text-left text-xs lg:text-sm font-bold text-blue-900 uppercase tracking-wider">
+                  Quantità
+                </th>
+                <th class="px-3 lg:px-6 py-4 text-left text-xs lg:text-sm font-bold text-blue-900 uppercase tracking-wider">
+                  Azioni
+                </th>
+            </tr>
+          </thead>
+            <tbody class="bg-white divide-y divide-blue-200">
+          {% for l in lines %}
+            {% set confirmed = l.codice_articolo in edited_articoli %}
+                <tr class="{{ 'bg-green-50 border-l-4 border-green-400' if confirmed else 'bg-gray-100' if l.removed else 'bg-white' }} hover:bg-blue-50 transition-colors duration-150 {{ 'opacity-50' if l.removed or l.unavailable else '' }} py-2">
+
+                  <td class="px-4 lg:px-8 py-6 lg:py-8">
+                    <div class="flex items-center">
+                      <div class="flex-shrink-0 w-10 h-10 lg:w-14 lg:h-14 bg-blue-200 rounded-xl flex items-center justify-center">
+                        <svg class="w-5 h-5 lg:w-7 lg:h-7 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                        </svg>
+                      </div>
+                      <div class="ml-3 lg:ml-5 min-w-0 flex-1">
+                        {% if l.descrizione_articolo %}
+                          <div class="text-base lg:text-xl font-bold text-gray-900 truncate mb-1">{{ l.descrizione_articolo }}</div>
+                        {% endif %}
+                        <div class="text-sm lg:text-base text-gray-600 font-mono truncate mb-2">{{ l.codice_articolo }}</div>
+                        {% if l.descrizione_supplementare %}
+                          <div class="text-sm lg:text-base text-red-600 font-medium mb-2 truncate">
+                            <svg class="w-4 h-4 lg:w-5 lg:h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                            {{ l.descrizione_supplementare }}
+                          </div>
+                        {% endif %}
+                        {% if l.data_evasione %}
+                          <div class="text-sm lg:text-base text-blue-600 font-medium mb-2 truncate">
+                            <svg class="w-4 h-4 lg:w-5 lg:h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            Data di evasione: {{ l.data_evasione }}
+                          </div>
+                        {% endif %}
+                        {% if l.removed or l.unavailable %}
+                          <div class="text-sm lg:text-base text-red-600 font-medium mb-2 truncate">
+                            <svg class="w-4 h-4 lg:w-5 lg:h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            {% if l.unavailable %}Materiale non disponibile{% else %}Riga rimossa{% endif %}
+                            {% if l.substitution_text %}
+                              <span class="ml-2 text-gray-700">→ {{ l.substitution_text }}</span>
+                            {% endif %}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-4 lg:px-8 py-6 lg:py-8">
+                    {% set confirmed = l.codice_articolo in edited_articoli %}
+                    {% set edit = edits|selectattr("articolo", "equalto", l.codice_articolo)|list|sort(attribute="timestamp")|last if confirmed else none %}
+                    {% if l.unavailable %}
+                      <div class="text-base lg:text-xl font-bold text-gray-400 line-through">{{ l.quantita }} {{ l.unita_misura }}</div>
+                    {% elif confirmed %}
+                      <div class="space-y-2">
+                        <div class="text-sm lg:text-base text-gray-500 line-through">{{ l.quantita }} {{ l.unita_misura }}</div>
+                        {% if l.unita_misura_2 and l.quantita_um2 %}
+                          <div class="text-sm text-gray-500 line-through">
+                            = {{ l.quantita_um2 }} {{ l.unita_misura_2 }}
+                          </div>
+                        {% endif %}
+                        <div class="text-base lg:text-xl font-bold text-green-600">{{ edit.quantita_nuova if edit else l.quantita }} {{ edit.unita_misura if edit else l.unita_misura }}</div>
+                      </div>
+                    {% else %}
+                      <div class="text-base lg:text-xl font-bold text-gray-900">{{ l.quantita }} {{ l.unita_misura }}</div>
+                      {% if l.unita_misura_2 and l.quantita_um2 %}
+                        <div class="text-sm text-gray-600 mt-2">
+                          = {{ l.quantita_um2 }} {{ l.unita_misura_2 }}
+                        </div>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                  <td class="px-4 lg:px-8 py-6 lg:py-8 text-xs lg:text-sm font-medium">
+                {% if current_user.role == 'picker' and not l.removed %}
+                <div class="grid grid-cols-2 gap-2">
+                  {% if l.is_added %}
+                  <div class="col-span-2 text-xs text-gray-500 mb-1">Aggiunta — inserisci quantità e conferma</div>
+                  <div class="col-span-2 flex items-center gap-2">
+                    <input type="number" step="0.01" min="0" class="w-28 px-2 py-1 border border-gray-300 rounded" id="qty_{{ loop.index }}" placeholder="Quantità">
+                    <span class="text-gray-700">{{ l.unita_misura }}</span>
+                    <button onclick="confirmAddedLine('{{ l.codice_articolo }}','{{ l.unita_misura }}','qty_{{ loop.index }}')"
+                            class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-green-600 hover:bg-green-700">Conferma</button>
+                  </div>
+                  {% endif %}
+                  <!-- Bottone Modifica -->
+                  <button
+                    onclick="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    title="Modifica quantità e unità di misura"
+                  >
+                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    Modifica
+                  </button>
+                  
+                  <!-- Bottone Conferma -->
+                      <button
+                    onclick="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    title="Conferma articolo preparato"
+                      >
+                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Conferma
+                      </button>
+                  
+                  <!-- Bottone Cattura -->
+                      <button
+                    onclick="openCaptureModal('{{ l.codice_articolo }}')"
+                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    title="Scatta foto o carica documento"
+                  >
+                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Cattura
+                      </button>
+                  
+                  <!-- Bottone Note -->
+                      <button
+                    onclick="openNoteModal('{{ l.codice_articolo }}')"
+                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    title="Aggiungi note per questo articolo"
+                      >
+                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Note
+                      </button>
+                </div>
+            {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Notes Section (COLLASSABILE) -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <button id="toggleNote" class="w-full px-6 py-4 border-b border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors duration-200 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">📝 Note Ordine</h2>
+            <p class="text-sm text-gray-500 mt-1">Aggiungi note per questo ordine o per articoli specifici</p>
+          </div>
+        </div>
+        <svg id="toggleNoteIcon" class="w-5 h-5 text-gray-600 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </button>
+      
+      <div id="noteContent" class="hidden">
+        <div class="p-6">
+          <!-- Add Note Form -->
+          <div class="mb-6">
+            <form id="noteForm" class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="noteArticolo" class="block text-sm font-medium text-gray-700 mb-2">
+                    Articolo (opzionale)
+                  </label>
+                  <select id="noteArticolo" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Note per l'ordine intero</option>
+                    {% for line in lines %}
+                      <option value="{{ line.codice_articolo }}">
+                        {{ line.codice_articolo }} - {{ line.descrizione_articolo if line.descrizione_articolo else 'Nessuna descrizione' }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label for="noteText" class="block text-sm font-medium text-gray-700 mb-2">
+                    Nota <span class="text-red-500">*</span>
+                  </label>
+                  <input type="text" id="noteText" placeholder="Scrivi una nota..." required
+                         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <div id="noteError" class="hidden mt-1 text-sm text-red-600"></div>
+                </div>
+              </div>
+              <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200" onclick="return validateNoteForm()">
+                Aggiungi Nota
+              </button>
+            </form>
+          </div>
+
+          <!-- Notes List -->
+          <div id="notesContainer">
+            <div class="text-center py-8">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p class="text-sm text-gray-500 mt-2">Caricamento note...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- Attachments Section (COLLASSABILE) -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <button id="toggleAttachments" class="w-full px-6 py-4 border-b border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors duration-200 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+          </svg>
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">📎 Allegati</h2>
+            <p class="text-sm text-gray-500 mt-1">Foto e documenti allegati all'ordine</p>
+          </div>
+        </div>
+        <svg id="toggleAttachmentsIcon" class="w-5 h-5 text-gray-600 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </button>
+      
+      <div id="attachmentsContent" class="hidden">
+        <div class="p-6">
+          <!-- Add Attachment Form -->
+          <div class="mb-6">
+            <form id="attachmentForm" class="space-y-4" enctype="multipart/form-data">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="attachmentArticolo" class="block text-sm font-medium text-gray-700 mb-2">
+                    Articolo (opzionale)
+                  </label>
+                  <select id="attachmentArticolo" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Allegato per l'ordine intero</option>
+                    {% for line in lines %}
+                      <option value="{{ line.codice_articolo }}">
+                        {{ line.codice_articolo }} - {{ line.descrizione_articolo if line.descrizione_articolo else 'Nessuna descrizione' }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                              <div>
+                <label for="attachmentFile" class="block text-sm font-medium text-gray-700 mb-2">
+                  File <span class="text-red-500">*</span>
+                </label>
+                <input type="file" id="attachmentFile" name="file" accept="image/*,.pdf,.doc,.docx,.txt" required
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <div id="fileError" class="hidden mt-1 text-sm text-red-600"></div>
+              </div>
+              </div>
+              <div>
+                <label for="attachmentNote" class="block text-sm font-medium text-gray-700 mb-2">
+                  Nota (opzionale)
+                </label>
+                <input type="text" id="attachmentNote" name="note" placeholder="Aggiungi una nota al file..." 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+              <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200" onclick="return validateAttachmentForm()">
+                Carica Allegato
+              </button>
+            </form>
+          </div>
+
+          <!-- Attachments List -->
+          <div id="attachmentsContainer">
+            <div class="text-center py-8">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+              <p class="text-sm text-gray-500 mt-2">Caricamento allegati...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- Confirmed/Modified Lines - Blocco Inferiore (COLLASSABILE) -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <button id="toggleModifiche" class="w-full px-6 py-4 border-b border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors duration-200 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900">Modifiche Effettuate</h2>
+              <p class="text-sm text-gray-500 mt-1">{{ edits|length }} modifica/e apportata/e dagli operatori</p>
+            </div>
+          </div>
+          <svg id="toggleIcon" class="w-5 h-5 text-gray-600 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        
+        <div id="modificheContent" class="hidden">
+          {% if edits %}
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Articolo
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Quantità
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    U.M.
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Operatore
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ora
+                  </th>
+              </tr>
+            </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+            {% for e in edits %}
+                <tr class="hover:bg-gray-50 transition-colors duration-150">
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                      <div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </div>
+                      <div class="ml-4">
+                        <div class="text-sm font-medium text-gray-900 font-mono">{{ e.articolo }}</div>
+                        {% for line in lines %}
+                          {% if line.codice_articolo == e.articolo %}
+                            {% if line.descrizione_articolo %}
+                              <div class="text-xs text-gray-600">{{ line.descrizione_articolo }}</div>
+                            {% endif %}
+                          {% endif %}
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ e.quantita_nuova }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ e.unita_misura }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ e.operatore }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ e.timestamp.strftime('%H:%M') if e.timestamp else '-' }}
+                  </td>
+                </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+          </div>
+          {% else %}
+          <div class="text-center py-8">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Nessuna modifica</h3>
+            <p class="mt-1 text-sm text-gray-500">Non sono state apportate modifiche a questo ordine.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+
+{% if partial_view %}
+<script>
+async function evadiResiduo(codice) {
+  const q = document.getElementById('qty-' + codice).value;
+  const um = document.getElementById('um-' + codice).value;
+  try {
+    const form = new URLSearchParams();
+    form.append('articolo', codice);
+    form.append('quantita', q);
+    form.append('unita', um);
+    form.append('back', 'parziali');
+    const res = await fetch(`{{ url_for('propose_confirm', seriale=seriale) }}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form
+    });
+    if (res.ok) {
+      window.location.replace(window.location.pathname + '?back=parziali');
+    } else {
+      alert('Errore durante evasione');
+    }
+  } catch (e) {
+    alert('Errore: ' + e.message);
+  }
+}
+
+async function salvaNotaResiduo(codice) {
+  const nota = document.getElementById('note-' + codice).value.trim();
+  if (!nota) { alert('Inserisci una nota'); return; }
+  try {
+    const res = await fetch(`/api/order/{{ seriale }}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ articolo: codice, nota })
+    });
+    if (res.ok) {
+      alert('Nota salvata');
+      document.getElementById('note-' + codice).value = '';
+    } else {
+      alert('Errore salvataggio nota');
+    }
+  } catch(e) {
+    alert('Errore: ' + e.message);
+  }
+}
+</script>
+{% endif %}
+  <!-- Back Button -->
+  <div class="flex justify-start">
+    <a href="{% if request.args.get('back') == 'preparazione' %}{{ url_for('ordini_preparazione') }}{% elif request.args.get('back') == 'preparati' %}{{ url_for('ordini_preparati') }}{% elif request.args.get('back') == 'parziali' %}{{ url_for('ordini_da_completare') }}{% else %}{{ url_for('index') }}{% endif %}" 
+       class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Torna agli Ordini
+    </a>
+  </div>
+  </div>
+
+<!-- Modal Materiale Non Disponibile -->
+<div id="unavailableModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
+  <div class="relative w-full max-w-3xl max-h-full mx-auto">
+    <div class="relative bg-white rounded-lg shadow-xl">
+      <div class="flex items-start justify-between p-4 border-b rounded-t">
+        <h3 class="text-xl font-semibold text-gray-900">Segna righe non disponibili</h3>
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center" onclick="closeUnavailableModal()">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="text-sm text-gray-600">Seleziona le righe non disponibili e specifica la sostituzione (opzionale) per ciascuna.</div>
+        <div class="space-y-2 max-h-80 overflow-y-auto border border-gray-200 rounded-lg">
+          {% for l in lines %}
+            {% if not l.removed %}
+            <div class="flex items-start gap-3 p-3 border-b last:border-b-0">
+              <input type="checkbox" class="unavailable-checkbox mt-1 w-5 h-5" data-articolo="{{ l.codice_articolo }}">
+              <div class="flex-1">
+                <div class="text-sm font-medium text-gray-900">{{ l.descrizione_articolo or l.codice_articolo }}</div>
+                <div class="text-xs text-gray-500 font-mono">{{ l.codice_articolo }} • {{ l.quantita }} {{ l.unita_misura }}</div>
+                <input type="text" class="mt-2 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm substitution-input" placeholder="Sostituzione proposta (opzionale)">
+              </div>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      <div class="flex items-center justify-end space-x-3 p-4 border-t">
+        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" onclick="closeUnavailableModal()">Annulla</button>
+        <button type="button" class="px-6 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg" onclick="submitUnavailable()">Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Label Print Modal -->
+<div id="labelPrintModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
+  <div class="relative w-full max-w-4xl max-h-full mx-auto">
+    <div class="relative bg-white rounded-lg shadow-xl">
+      <div class="flex items-start justify-between p-4 border-b rounded-t">
+        <h3 class="text-xl font-semibold text-gray-900">Stampa</h3>
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center" onclick="closeLabelPrintModal()">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-6">
+        <!-- Configurazione etichette rimossa per semplificare l'interfaccia -->
+
+        <!-- Selezione Righe -->
+        <div>
+          <h4 class="text-lg font-semibold text-gray-900 mb-4">📋 Seleziona Righe per Stampa</h4>
+          
+          <!-- Checkbox Seleziona Tutto -->
+          <div class="mb-4 p-3 bg-gray-50 rounded-lg border">
+            <div class="flex items-center space-x-3">
+              <input type="checkbox" id="selectAllLabels" class="w-5 h-5 text-gray-600 bg-white border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer" onchange="toggleAllLabels()">
+              <label for="selectAllLabels" class="text-sm font-medium text-gray-700">Seleziona tutte le righe</label>
+            </div>
+          </div>
+          
+          <!-- Lista Righe con Checkbox -->
+          <div class="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-4">
+            {% for l in lines %}
+              {% if not l.removed %}
+              <div class="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer select-none transition-all duration-200 active:bg-blue-50 active:border-blue-300 active:scale-95 row-clickable touch-friendly" 
+                   onclick="toggleRowSelection(this, event)"
+                   style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+                {# Usa eventuale modifica confermata per quantita/U.M. #}
+                {% set edit_obj = (edits | selectattr('articolo', 'equalto', l.codice_articolo) | list | first) %}
+                <input type="checkbox" 
+                       class="labelCheckbox w-5 h-5 text-gray-600 bg-white border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer" 
+                       data-articolo="{{ l.codice_articolo }}"
+                       data-descrizione="{{ l.descrizione_articolo or 'N/A' }}"
+                       data-quantita="{{ edit_obj.quantita_nuova if edit_obj else l.quantita }}"
+                       data-unita="{{ edit_obj.unita_misura if edit_obj else l.unita_misura }}"
+                       data-quantita-um2="{{ l.quantita_um2 or '' }}"
+                       data-unita-um2="{{ l.unita_misura_2 or '' }}"
+                       data-data-evasione="{{ l.data_evasione or '' }}"
+                       data-ritiro="{{ l.ritiro or '' }}"
+                       data-note="{{ l.note or '' }}"
+                       {% if not l.removed %}checked{% endif %}>
+                
+                <div class="flex-1">
+                  <div class="font-medium text-gray-900">{{ l.descrizione_articolo or 'N/A' }}</div>
+                  <div class="text-sm text-gray-600 font-mono">{{ l.codice_articolo }}</div>
+                  <div class="text-sm text-gray-700">{{ edit_obj.quantita_nuova if edit_obj else l.quantita }} {{ edit_obj.unita_misura if edit_obj else l.unita_misura }}</div>
+                  {% if l.data_evasione %}
+                  <div class="text-xs text-blue-600">📅 {{ l.data_evasione }}</div>
+                  {% endif %}
+                  {% if l.ritiro %}
+                  <div class="text-xs text-orange-600">
+                    {% if 'consegna' in l.ritiro.lower() %}🚚 Consegna
+                    {% elif 'ritiro' in l.ritiro.lower() %}📦 Ritiro
+                    {% else %}{{ l.ritiro }}{% endif %}
+                  </div>
+                  {% endif %}
+                  
+                  {% if l.note %}
+                  <div class="text-xs text-green-600 mt-1 p-1 bg-green-50 rounded border">
+                    📝 {{ l.note }}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Opzioni Stampa -->
+        <div>
+            <h4 class="text-lg font-semibold text-gray-900 mb-4">⚙️ Opzioni Stampa</h4>
+            <div class="space-y-4">
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="printHeader" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer" checked>
+                <label for="printHeader" class="text-sm font-medium text-gray-700">Includi intestazione ordine</label>
+              </div>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="printBarcode" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer" checked>
+                <label for="printBarcode" class="text-sm font-medium text-gray-700">Includi codice a barre</label>
+              </div>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="printQR" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer">
+                <label for="printQR" class="text-sm font-medium text-gray-700">Includi codice QR</label>
+              </div>
+              
+              <div class="border-t pt-4 mt-4">
+                <h5 class="text-sm font-medium text-gray-700 mb-3">🔪 Opzioni Taglio</h5>
+                <div class="space-y-3">
+                  <div class="flex items-center space-x-3">
+                    <input type="radio" id="cutAuto" name="cutType" value="auto" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 focus:ring-gray-500 focus:ring-2 cursor-pointer" checked>
+                    <label for="cutAuto" class="text-sm font-medium text-gray-700">Taglio automatico (stampanti termiche)</label>
+                  </div>
+                  <div class="flex items-center space-x-3">
+                    <input type="radio" id="cutManual" name="cutType" value="manual" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 focus:ring-gray-500 focus:ring-2 cursor-pointer">
+                    <label for="cutManual" class="text-sm font-medium text-gray-700">Taglio manuale (indicatori visivi)</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Azioni -->
+        <div class="flex items-center justify-end space-x-3 pt-4 border-t">
+          <button type="button" onclick="closeLabelPrintModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200">
+            Annulla
+          </button>
+          <button type="button" onclick="printSelectedLabels()" class="px-6 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200">
+            🖨️ Stampa Etichette
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+<!-- Add Article Modal -->
+<div id="addArticleModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
+  <div class="relative w-full max-w-sm sm:max-w-md max-h-full mx-auto">
+    <div class="relative bg-white rounded-lg shadow-xl">
+      <div class="flex items-start justify-between p-4 border-b rounded-t">
+        <h3 class="text-xl font-semibold text-gray-900">Aggiungi Articolo</h3>
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center" data-modal-hide="addArticleModal">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div>
+          <label for="searchArticle" class="block text-sm font-medium text-gray-700 mb-2">Cerca Articolo</label>
+          <input type="text" id="searchArticle" class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Codice o descrizione...">
+        </div>
+        <div>
+          <label for="warehouse" class="block text-sm font-medium text-gray-700 mb-2">Magazzino</label>
+          <select id="warehouse" class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="">-- seleziona --</option>
+            </select>
+          </div>
+        </div>
+      <div class="flex items-center justify-end p-4 space-x-2 border-t border-gray-200 rounded-b">
+        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" data-modal-hide="addArticleModal">Annulla</button>
+        <button type="button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">Aggiungi</button>
+      </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Edit Modal -->
+<div id="editModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
+  <div class="relative w-full max-w-sm sm:max-w-md max-h-full mx-auto">
+          <form method="POST" id="editForm" class="relative bg-white rounded-lg shadow-xl" onsubmit="return validateEditForm()">
+      <div class="flex items-start justify-between p-4 border-b rounded-t">
+        <h3 class="text-xl font-semibold text-gray-900">Modifica Quantità</h3>
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center" data-modal-hide="editModal">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+        </div>
+      <div class="p-6 space-y-4">
+          <input type="hidden" name="articolo" id="modalArticolo">
+        
+        <!-- Messaggio di errore -->
+        <div id="editError" class="hidden p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-400 rounded-lg">
+          <div class="flex">
+            <svg class="flex-shrink-0 w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+            <span id="editErrorMessage"></span>
+          </div>
+        </div>
+        
+        <div>
+          <label for="modalQuantita" class="block text-sm font-medium text-gray-700 mb-2">Nuova Quantità <span class="text-red-500">*</span></label>
+          <input type="number" step="0.1" name="quantita_nuova" id="modalQuantita" required
+                 class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="Inserisci la quantità">
+          <div id="quantitaError" class="hidden mt-1 text-sm text-red-600"></div>
+        </div>
+        <div>
+          <label for="modalUnita" class="block text-sm font-medium text-gray-700 mb-2">Unità di Misura <span class="text-red-500">*</span></label>
+          <select name="unita_misura" id="modalUnita" required
+                  class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <option value="">Seleziona unità di misura</option>
+            <option value="N.">N.</option>
+            <option value="KG.">KG.</option>
+            <option value="ML">ML</option>
+            <option value="MQ">MQ</option>
+            <option value="BR">BR</option>
+            <option value="FG">FG</option>
+            <option value="M.">M.</option>
+            <option value="PZ">PZ</option>
+            <option value="PC">PC</option>
+          </select>
+          <div id="unitaError" class="hidden mt-1 text-sm text-red-600"></div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end p-4 space-x-2 border-t border-gray-200 rounded-b">
+        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" data-modal-hide="editModal">Annulla</button>
+        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" onclick="return validateEditForm()">Salva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<!-- Note Modal per Articolo -->
+<div id="noteModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
+  <div class="relative w-full max-w-sm sm:max-w-md max-h-full mx-auto">
+    <div class="relative bg-white rounded-lg shadow-xl">
+      <div class="flex items-start justify-between p-4 border-b rounded-t">
+        <h3 class="text-xl font-semibold text-gray-900">Note per Articolo</h3>
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center" onclick="closeNoteModal()">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Articolo</label>
+          <div id="noteArticoloDisplay" class="px-3 py-2 bg-gray-100 rounded-lg text-gray-900 font-mono"></div>
+        </div>
+        <div>
+          <label for="noteTextArticolo" class="block text-sm font-medium text-gray-700 mb-2">Nota</label>
+          <textarea id="noteTextArticolo" rows="3" placeholder="Scrivi una nota per questo articolo..." 
+                    class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"></textarea>
+        </div>
+      </div>
+      <div class="flex items-center justify-end p-4 space-x-2 border-t border-gray-200 rounded-b">
+        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200" onclick="closeNoteModal()">Annulla</button>
+        <button type="button" class="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200" onclick="saveArticoloNote()">Salva Nota</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Edit modal functionality
+  const editModal = document.getElementById('editModal');
+  const editButtons = document.querySelectorAll('[data-modal-target="editModal"]');
+  const closeEditButtons = document.querySelectorAll('[data-modal-hide="editModal"]');
+  
+  editButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const articolo = this.getAttribute('data-articolo');
+      const quantita = this.getAttribute('data-quantita');
+      const unita = this.getAttribute('data-unita');
+      
+      document.getElementById('modalArticolo').value = articolo;
+      document.getElementById('modalQuantita').value = quantita;
+      
+      // Imposta il valore corretto nel select
+      const unitaSelect = document.getElementById('modalUnita');
+      unitaSelect.value = unita;
+      
+      document.getElementById('editForm').action = "{{ url_for('propose_edit', seriale=seriale) }}";
+    });
+  });
+
+  // Chiudi correttamente modale con X e Annulla
+  closeEditButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      editModal.classList.add('hidden');
+    });
+  });
+
+  // Toggle modifiche functionality
+  const toggleModifiche = document.getElementById('toggleModifiche');
+  const modificheContent = document.getElementById('modificheContent');
+  const toggleIcon = document.getElementById('toggleIcon');
+  
+  if (toggleModifiche && modificheContent && toggleIcon) {
+    toggleModifiche.addEventListener('click', function() {
+      const isHidden = modificheContent.classList.contains('hidden');
+      
+      if (isHidden) {
+        modificheContent.classList.remove('hidden');
+        toggleIcon.classList.add('rotate-180');
+      } else {
+        modificheContent.classList.add('hidden');
+        toggleIcon.classList.remove('rotate-180');
+      }
+    });
+  }
+
+  // Toggle note functionality
+  const toggleNote = document.getElementById('toggleNote');
+  const noteContent = document.getElementById('noteContent');
+  const toggleNoteIcon = document.getElementById('toggleNoteIcon');
+  
+  if (toggleNote && noteContent && toggleNoteIcon) {
+    toggleNote.addEventListener('click', function() {
+      const isHidden = noteContent.classList.contains('hidden');
+      
+      if (isHidden) {
+        noteContent.classList.remove('hidden');
+        toggleNoteIcon.classList.add('rotate-180');
+      } else {
+        noteContent.classList.add('hidden');
+        toggleNoteIcon.classList.remove('rotate-180');
+      }
+    });
+  }
+
+  // Toggle per la sezione allegati
+  const toggleAttachments = document.getElementById('toggleAttachments');
+  const attachmentsContent = document.getElementById('attachmentsContent');
+  const toggleAttachmentsIcon = document.getElementById('toggleAttachmentsIcon');
+
+  if (toggleAttachments && attachmentsContent && toggleAttachmentsIcon) {
+    toggleAttachments.addEventListener('click', function() {
+      const isHidden = attachmentsContent.classList.contains('hidden');
+      
+      if (isHidden) {
+        attachmentsContent.classList.remove('hidden');
+        toggleAttachmentsIcon.classList.add('rotate-180');
+      } else {
+        attachmentsContent.classList.add('hidden');
+        toggleAttachmentsIcon.classList.remove('rotate-180');
+      }
+    });
+  }
+});
+
+// Funzioni globali per il modal delle note
+let currentArticolo = '';
+
+function openNoteModal(articolo) {
+  currentArticolo = articolo;
+  document.getElementById('noteArticoloDisplay').textContent = articolo;
+  document.getElementById('noteTextArticolo').value = '';
+  document.getElementById('noteModal').classList.remove('hidden');
+}
+
+function closeNoteModal() {
+  document.getElementById('noteModal').classList.add('hidden');
+  currentArticolo = '';
+}
+
+function saveArticoloNote() {
+  const nota = document.getElementById('noteTextArticolo').value.trim();
+  
+  if (!nota) {
+    alert('Inserisci una nota');
+    return;
+  }
+  
+  // Usa la stessa funzione di aggiunta nota ma con l'articolo specifico
+  addNote(currentArticolo, nota);
+  closeNoteModal();
+}
+
+// Funzione per gestire il menu dropdown delle azioni (RIMOSSA - ora usiamo bottoni diretti)
+// function toggleDropdown(index) { ... } - RIMOSSA
+
+// Funzioni per i modali di modifica, conferma e cattura (da aggiungere)
+function openEditModal(articolo, quantita, unita) {
+  document.getElementById('modalArticolo').value = articolo;
+  document.getElementById('modalQuantita').value = quantita;
+  const unitaSelect = document.getElementById('modalUnita');
+  setSelectUnit(unitaSelect, unita);
+  document.getElementById('editForm').action = "{{ url_for('propose_edit', seriale=seriale) }}";
+  document.getElementById('editModal').classList.remove('hidden');
+  
+  // Nascondi eventuali messaggi di errore precedenti
+  hideEditErrors();
+
+  // Nuova logica: chiedi se mettere l'ordine "in preparazione" automaticamente
+  try {
+    const currentStatus = '{{ order_status or "nuovo" }}';
+    if (currentStatus !== 'in_preparazione' && currentStatus !== 'pronto') {
+      setTimeout(async () => {
+        const wants = confirm('Vuoi mettere l\'ordine in lavorazione?');
+        if (wants) {
+          try {
+            const res = await fetch("{{ url_for('update_order_status', seriale=seriale) }}", {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ status: 'in_preparazione' })
+            });
+            if (!res.ok) console.warn('Impossibile impostare stato in_preparazione');
+          } catch (e) {
+            console.warn('Errore aggiornamento stato:', e);
+          }
+        }
+      }, 0);
+    }
+  } catch (_) { /* ignore */ }
+}
+
+function hideEditErrors() {
+  document.getElementById('editError').classList.add('hidden');
+  document.getElementById('quantitaError').classList.add('hidden');
+  document.getElementById('unitaError').classList.add('hidden');
+}
+
+function showEditError(message) {
+  const errorDiv = document.getElementById('editError');
+  const errorMessage = document.getElementById('editErrorMessage');
+  errorMessage.textContent = message;
+  errorDiv.classList.remove('hidden');
+}
+
+// --- Unavailable modal logic ---
+function openUnavailableModal() {
+  document.getElementById('unavailableModal').classList.remove('hidden');
+}
+function closeUnavailableModal() {
+  document.getElementById('unavailableModal').classList.add('hidden');
+}
+async function submitUnavailable() {
+  const checkboxes = document.querySelectorAll('.unavailable-checkbox');
+  const payload = [];
+  checkboxes.forEach(cb => {
+    const articolo = cb.getAttribute('data-articolo');
+    const substitutionInput = cb.closest('div.flex').querySelector('.substitution-input');
+    payload.push({
+      articolo,
+      unavailable: cb.checked,
+      substitution_text: substitutionInput ? substitutionInput.value.trim() : ''
+    });
+  });
+
+  try {
+    const res = await fetch(`/ordine/${encodeURIComponent('{{ seriale }}')}/unavailable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      alert('Errore nel salvataggio: ' + (data.error || res.status));
+      return;
+    }
+    closeUnavailableModal();
+    // Ricarica per riflettere le modifiche
+    window.location.reload();
+  } catch (e) {
+    alert('Errore di rete nel salvataggio');
+  }
+}
+
+function confirmAddedLine(articolo, unita, qtyInputId) {
+  const input = document.getElementById(qtyInputId);
+  const value = (input && input.value) ? input.value.trim() : '';
+  if (!value || isNaN(value) || parseFloat(value) <= 0) {
+    alert('Inserisci una quantità valida');
+    return;
+  }
+  openConfirmModal(articolo, value, unita);
+}
+
+// Normalizza e seleziona l'unità di misura esistente; se assente, la aggiunge
+function setSelectUnit(selectEl, unitRaw) {
+  if (!selectEl) return;
+  if (!unitRaw) { selectEl.value = ''; return; }
+  const normalized = normalizeUnit(unitRaw);
+  let found = false;
+  for (let i = 0; i < selectEl.options.length; i++) {
+    if (selectEl.options[i].value === normalized) {
+      selectEl.value = normalized;
+      found = true;
+      break;
+    }
+  }
+  if (!found && normalized) {
+    const opt = document.createElement('option');
+    opt.value = normalized;
+    opt.textContent = normalized;
+    selectEl.appendChild(opt);
+    selectEl.value = normalized;
+  }
+}
+
+function normalizeUnit(u) {
+  try {
+    let v = String(u).trim().toUpperCase();
+    v = v.replace(/\s+/g, '');
+    if (v.endsWith('.')) v = v.slice(0, -1);
+    const map = {
+      'N': 'N.', 'KG': 'KG.', 'ML': 'ML', 'MQ': 'MQ', 'BR': 'BR',
+      'FG': 'FG', 'M': 'M.', 'PZ': 'PZ', 'PC': 'PC'
+    };
+    return map[v] || String(u).trim();
+  } catch(e) {
+    return String(u || '');
+  }
+}
+
+function validateEditForm() {
+  hideEditErrors();
+  
+  const quantita = document.getElementById('modalQuantita').value.trim();
+  const unita = document.getElementById('modalUnita').value.trim();
+  let isValid = true;
+  
+  // Validazione quantità
+  if (!quantita) {
+    document.getElementById('quantitaError').textContent = 'La quantità è obbligatoria';
+    document.getElementById('quantitaError').classList.remove('hidden');
+    isValid = false;
+  } else if (isNaN(quantita) || parseFloat(quantita) <= 0) {
+    document.getElementById('quantitaError').textContent = 'La quantità deve essere un numero positivo';
+    document.getElementById('quantitaError').classList.remove('hidden');
+    isValid = false;
+  }
+  
+  // Validazione unità di misura
+  if (!unita) {
+    document.getElementById('unitaError').textContent = 'Seleziona un\'unità di misura';
+    document.getElementById('unitaError').classList.remove('hidden');
+    isValid = false;
+  }
+  
+  if (!isValid) {
+    showEditError('Compila correttamente tutti i campi obbligatori');
+  }
+  
+  return isValid;
+}
+
+function validateAttachmentForm() {
+  const fileInput = document.getElementById('attachmentFile');
+  const fileError = document.getElementById('fileError');
+  
+  // Nascondi errori precedenti
+  fileError.classList.add('hidden');
+  
+  // Validazione file
+  if (!fileInput.files || fileInput.files.length === 0) {
+    fileError.textContent = 'Seleziona un file da caricare';
+    fileError.classList.remove('hidden');
+    return false;
+  }
+  
+  const file = fileInput.files[0];
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+  
+  if (!allowedTypes.includes(file.type)) {
+    fileError.textContent = 'Tipo di file non supportato. Usa immagini, PDF, documenti Word o file di testo';
+    fileError.classList.remove('hidden');
+    return false;
+  }
+  
+  // Controlla dimensione file (max 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    fileError.textContent = 'Il file è troppo grande. Dimensione massima: 10MB';
+    fileError.classList.remove('hidden');
+    return false;
+  }
+  
+  return true;
+}
+
+function validateNoteForm() {
+  const noteText = document.getElementById('noteText').value.trim();
+  const noteError = document.getElementById('noteError');
+  
+  // Nascondi errori precedenti
+  noteError.classList.add('hidden');
+  
+  // Validazione nota
+  if (!noteText) {
+    noteError.textContent = 'Inserisci il testo della nota';
+    noteError.classList.remove('hidden');
+    return false;
+  }
+  
+  if (noteText.length < 3) {
+    noteError.textContent = 'La nota deve contenere almeno 3 caratteri';
+    noteError.classList.remove('hidden');
+    return false;
+  }
+  
+  return true;
+}
+
+function openConfirmModal(articolo, quantita, unita) {
+  if (confirm(`Confermare l'articolo ${articolo} con quantità ${quantita} ${unita}?`)) {
+    // Crea un form temporaneo per inviare i dati
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = "{{ url_for('propose_confirm', seriale=seriale) }}";
+    
+    // Aggiungi i campi necessari
+    const articoloField = document.createElement('input');
+    articoloField.type = 'hidden';
+    articoloField.name = 'articolo';
+    articoloField.value = articolo;
+    
+    const quantitaField = document.createElement('input');
+    quantitaField.type = 'hidden';
+    quantitaField.name = 'quantita';
+    quantitaField.value = quantita;
+    
+    const unitaField = document.createElement('input');
+    unitaField.type = 'hidden';
+    unitaField.name = 'unita';
+    unitaField.value = unita;
+    
+    // Aggiungi i campi al form
+    form.appendChild(articoloField);
+    form.appendChild(quantitaField);
+    form.appendChild(unitaField);
+    
+    // Aggiungi il form al documento e invialo
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+
+function openCaptureModal(articolo) {
+  // Imposta l'articolo selezionato nel form allegati
+  if (articolo) {
+    const attachmentArticolo = document.getElementById('attachmentArticolo');
+    if (attachmentArticolo) {
+      attachmentArticolo.value = articolo;
+    }
+  }
+  
+  // Apri la sezione allegati
+  const attachmentsContent = document.getElementById('attachmentsContent');
+  const toggleAttachmentsIcon = document.getElementById('toggleAttachmentsIcon');
+  
+  if (attachmentsContent && toggleAttachmentsIcon) {
+    attachmentsContent.classList.remove('hidden');
+    toggleAttachmentsIcon.classList.add('rotate-180');
+  }
+  
+  // Focus sul campo file
+  const attachmentFile = document.getElementById('attachmentFile');
+  if (attachmentFile) {
+    attachmentFile.focus();
+  }
+}
+
+// Chiudi i menu quando si clicca fuori (RIMOSSO - non più necessario con i bottoni diretti)
+// document.addEventListener('click', function(event) { ... }); - RIMOSSO
+
+// Funzioni per la stampa delle etichette
+function openLabelPrintModal() {
+  document.getElementById('labelPrintModal').classList.remove('hidden');
+  updateSelectedLinesPreview();
+  updatePrintSummary();
+}
+
+function closeLabelPrintModal() {
+  document.getElementById('labelPrintModal').classList.add('hidden');
+}
+
+function toggleAllLabels() {
+  const selectAll = document.getElementById('selectAllLabels');
+  const checkboxes = document.querySelectorAll('.labelCheckbox');
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = selectAll.checked;
+  });
+  
+  updateSelectedLinesPreview();
+  updatePrintSummary();
+}
+
+function updateSelectedLinesPreview() {
+  const selectedCheckboxes = document.querySelectorAll('.labelCheckbox:checked');
+  const previewContainer = document.getElementById('selectedLinesPreview');
+  
+  if (selectedCheckboxes.length === 0) {
+    previewContainer.innerHTML = `
+      <div class="text-center py-8 text-gray-500">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <p class="mt-2 text-sm">Nessuna riga selezionata</p>
+      </div>
+    `;
+    return;
+  }
+  
+  let previewHTML = '';
+  selectedCheckboxes.forEach(checkbox => {
+    const articolo = checkbox.getAttribute('data-articolo');
+    const descrizione = checkbox.getAttribute('data-descrizione');
+    const quantita = checkbox.getAttribute('data-quantita');
+    const unita = checkbox.getAttribute('data-unita');
+    const quantitaUm2 = checkbox.getAttribute('data-quantita-um2');
+    const unitaUm2 = checkbox.getAttribute('data-unita-um2');
+    
+    previewHTML += `
+      <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+        <div class="flex-1">
+          <div class="font-medium text-gray-900">${descrizione}</div>
+          <div class="text-sm text-gray-600 font-mono">${articolo}</div>
+          <div class="text-sm text-gray-700">${quantita} ${unita}</div>
+          ${quantitaUm2 ? `<div class="text-xs text-gray-500">= ${quantitaUm2} ${unitaUm2}</div>` : ''}
+        </div>
+        <div class="ml-4">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+            Selezionato
+          </span>
+        </div>
+      </div>
+    `;
+  });
+  
+  previewContainer.innerHTML = previewHTML;
+}
+
+function updatePrintSummary() {
+  const selectedCheckboxes = document.querySelectorAll('.labelCheckbox:checked');
+  const selectedCount = document.getElementById('selectedCount');
+  const totalLabels = document.getElementById('totalLabels');
+  
+  selectedCount.textContent = selectedCheckboxes.length;
+  totalLabels.textContent = selectedCheckboxes.length;
+}
+
+// Funzione per gestire il clic sulla riga
+function toggleRowSelection(rowElement, event) {
+  // Previeni il doppio clic se si clicca direttamente sul checkbox
+  if (event.target.type === 'checkbox') {
+    return;
+  }
+  
+  // Trova il checkbox all'interno della riga
+  const checkbox = rowElement.querySelector('.labelCheckbox');
+  if (checkbox) {
+    // Inverte lo stato del checkbox
+    checkbox.checked = !checkbox.checked;
+    
+    // Aggiorna il contatore e il riepilogo
+    updateSelectedLinesPreview();
+    updatePrintSummary();
+    
+    // Aggiungi feedback visivo
+    rowElement.style.transform = 'scale(0.98)';
+    setTimeout(() => {
+      rowElement.style.transform = 'scale(1)';
+    }, 100);
+  }
+}
+
+function printSelectedLabels() {
+  const selectedCheckboxes = document.querySelectorAll('.labelCheckbox:checked');
+  
+  if (selectedCheckboxes.length === 0) {
+    alert('Seleziona almeno una riga per stampare le etichette!');
+    return;
+  }
+  
+  // Raccogli i dati delle righe selezionate
+  const selectedLines = [];
+  selectedCheckboxes.forEach(checkbox => {
+    selectedLines.push({
+      articolo: checkbox.getAttribute('data-articolo'),
+      descrizione: checkbox.getAttribute('data-descrizione'),
+      quantita: checkbox.getAttribute('data-quantita'),
+      unita: checkbox.getAttribute('data-unita'),
+      quantitaUm2: checkbox.getAttribute('data-quantita-um2'),
+      unitaUm2: checkbox.getAttribute('data-unita-um2'),
+      dataEvasione: checkbox.getAttribute('data-data-evasione'),
+      ritiro: checkbox.getAttribute('data-ritiro'),
+      note: checkbox.getAttribute('data-note') || ''
+    });
+  });
+  
+  // Opzioni di stampa
+  const options = {
+    printHeader: document.getElementById('printHeader').checked,
+    printBarcode: document.getElementById('printBarcode').checked,
+    printQR: document.getElementById('printQR').checked,
+    cutType: document.querySelector('input[name="cutType"]:checked').value
+  };
+  
+  // Crea la pagina di stampa
+  const printWindow = window.open('', '_blank', 'width=800,height=600');
+  const printContent = generateLabelPrintContent(selectedLines, options);
+  
+  printWindow.document.write(printContent);
+  printWindow.document.close();
+  
+  // Stampa automatica
+  setTimeout(() => {
+    printWindow.print();
+  }, 500);
+}
+
+function generateLabelPrintContent(selectedLines, options) {
+  const orderInfo = {
+    seriale: '{{ seriale }}',
+    numero: '{{ numero }}',
+    customer: '{{ customer }}',
+    date: '{{ date }}'
+  };
+  const logoUrl = "{{ url_for('static', filename='logo_etichetta.png') }}";
+  
+  let content = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Etichette Ordine ${orderInfo.numero}</title>
+      <style>
+        @media print {
+          @page { 
+            margin: 0; 
+            size: 62mm auto; /* Larghezza 62mm per compatibilità Brother QL-700 */
+          }
+          body { 
+            margin: 0; 
+            padding: 0; 
+            width: 62mm;
+          }
+        }
+        
+        body { 
+          font-family: Arial, sans-serif; 
+          margin: 0; 
+          padding: 0; 
+          width: 62mm;
+        }
+        
+        .label { 
+          width: 62mm; 
+          min-height: 25mm; /* Altezza minima invece di fissa */
+          border: 1px solid #ccc; 
+          margin: 0; 
+          padding: 3mm; 
+          box-sizing: border-box;
+          position: relative;
+          margin-bottom: 2mm; /* Spazio tra etichette */
+        }
+        .logo { text-align:center; margin-bottom: 2mm; }
+        .logo img { width: 100%; max-height: 12mm; object-fit: contain; }
+        
+        /* Stili per taglio automatico */
+        .cut-auto .label {
+          page-break-after: always; /* FORZA TAGLIO DOPO OGNI ETICHETTA */
+          page-break-inside: avoid;
+          break-after: page; /* Taglio moderno */
+        }
+        
+        .cut-auto .label:last-child {
+          page-break-after: avoid; /* Ultima etichetta senza taglio */
+        }
+        
+        /* Stili per taglio manuale */
+        .cut-manual .label {
+          margin-bottom: 8mm; /* Spazio maggiore per taglio manuale */
+        }
+        
+        /* Linee di taglio per separazione visiva */
+        .cut-manual .label::after {
+          content: '';
+          position: absolute;
+          bottom: -4mm;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: linear-gradient(to right, transparent, #ff0000, transparent);
+          border-bottom: 2px dashed #ff0000;
+        }
+        
+        .cut-manual .label:last-child::after {
+          display: none; /* Ultima etichetta senza linea di taglio */
+        }
+        
+        .header { text-align: center; margin-bottom: 3mm; }
+        .order-info { font-size: 10pt; margin-bottom: 2mm; }
+        .article-info { font-size: 11pt; font-weight: bold; margin-bottom: 3mm; line-height: 1.2; }
+        .quantity { font-size: 12pt; font-weight: bold; text-align: center; margin: 3mm 0; }
+        .barcode { text-align: center; margin-top: 3mm; }
+        .qr-code { text-align: center; margin-top: 3mm; }
+        .footer { font-size: 8pt; text-align: center; margin-top: 3mm; color: #666; }
+        
+        /* Gestione overflow e spaziatura */
+        .label > * {
+          margin-bottom: 1mm;
+        }
+        
+        .label > *:last-child {
+          margin-bottom: 0;
+        }
+        
+        /* Indicatori di taglio per stampanti termiche */
+        .cut-indicator {
+          position: absolute;
+          bottom: 1mm;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 6pt;
+          color: #ff0000;
+          font-weight: bold;
+        }
+        
+        .cut-indicator::before {
+          content: '✂️ TAGLIA QUI';
+          background: #fff;
+          padding: 1mm 2mm;
+          border: 1px solid #ff0000;
+          border-radius: 2mm;
+        }
+      </style>
+    </head>
+    <body class="cut-${options.cutType}">
+  `;
+  
+  selectedLines.forEach((line, index) => {
+    const isLast = index === selectedLines.length - 1;
+    
+    content += `
+      <div class="label ${isLast ? 'last-label' : ''}">
+        <div class="logo">
+          <img src="${logoUrl}" alt="Logo">
+        </div>
+        ${options.printHeader ? `
+          <div class="header">
+            <div style="font-size: 12pt; font-weight: bold; line-height: 1.1; word-wrap: break-word;">${orderInfo.customer}</div>
+            <div style="font-size: 9pt; margin-top: 1mm;">Ordine: ${orderInfo.numero}</div>
+            <div style="font-size: 9pt;">Data: ${orderInfo.date}</div>
+          </div>
+        ` : ''}
+        
+        <div class="article-info">
+          <div style="word-wrap: break-word; overflow-wrap: break-word;">${line.descrizione}</div>
+          <div style="font-size: 10pt; font-family: monospace; margin-top: 1mm;">${line.articolo}</div>
+        </div>
+        
+        <div class="quantity">
+          <div style="font-size: 12pt; font-weight: bold;">${line.quantita} ${line.unita}</div>
+          ${line.quantitaUm2 ? `<div style="font-size: 10pt; margin-top: 1mm; color: #666;">= ${line.quantitaUm2} ${line.unitaUm2}</div>` : ''}
+        </div>
+        
+        <!-- Informazioni aggiuntive -->
+        <div class="additional-info" style="margin-top: 2mm; text-align: center;">
+          ${line.dataEvasione ? `
+            <div style="font-size: 9pt; color: #2563eb; margin-bottom: 1mm;">
+              📅 Data Evasione: ${line.dataEvasione}
+            </div>
+          ` : ''}
+          
+          ${line.ritiro ? `
+            <div style="font-size: 9pt; color: #ea580c; font-weight: bold;">
+              ${line.ritiro.toLowerCase().includes('consegna') ? '🚚 CONSEGNA' : 
+                line.ritiro.toLowerCase().includes('ritiro') ? '📦 RITIRO' : 
+                line.ritiro}
+            </div>
+          ` : ''}
+          
+          ${line.note ? `
+            <div style="font-size: 8pt; color: #059669; margin-top: 2mm; padding: 1mm; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 2mm;">
+              📝 ${line.note}
+            </div>
+          ` : ''}
+        </div>
+        
+        ${options.printBarcode ? `
+          <div class="barcode">
+            <div style="font-size: 8pt; font-family: monospace;">${line.articolo}</div>
+          </div>
+        ` : ''}
+        
+        ${options.printQR ? `
+          <div class="qr-code">
+            <div style="font-size: 8pt;">QR: ${orderInfo.seriale}-${line.articolo}</div>
+          </div>
+        ` : ''}
+        
+        <div class="footer">
+          ${orderInfo.seriale} • ${new Date().toLocaleDateString('it-IT')}
+        </div>
+        
+        ${!isLast && options.cutType === 'manual' ? '<div class="cut-indicator"></div>' : ''}
+      </div>
+      
+      ${!isLast && options.cutType === 'auto' ? '<!-- FORZA TAGLIO AUTOMATICO -->' : ''}
+    `;
+  });
+  
+  content += `
+    </body>
+    </html>
+  `;
+  
+  return content;
+}
+
+// Event listeners per i checkbox delle etichette
+document.addEventListener('DOMContentLoaded', function() {
+  const labelCheckboxes = document.querySelectorAll('.labelCheckbox');
+  
+  labelCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      updateSelectedLinesPreview();
+      updatePrintSummary();
+      
+      // Aggiorna il checkbox "seleziona tutto"
+      const selectAll = document.getElementById('selectAllLabels');
+      const allChecked = document.querySelectorAll('.labelCheckbox:checked').length;
+      const totalCheckboxes = labelCheckboxes.length;
+      
+      if (allChecked === 0) {
+        selectAll.indeterminate = false;
+        selectAll.checked = false;
+      } else if (allChecked === totalCheckboxes) {
+        selectAll.indeterminate = false;
+        selectAll.checked = true;
+      } else {
+        selectAll.indeterminate = true;
+      }
+    });
+  });
+});
+
+// Funzioni globali per gli allegati
+window.deleteAttachment = function(attachmentId) {
+  if (!confirm('Sei sicuro di voler eliminare questo allegato?')) {
+    return;
+  }
+  
+  fetch(`/api/attachments/${attachmentId}`, {
+    method: 'DELETE'
+  })
+  .then(response => {
+    if (response.ok) {
+      // Ricarica gli allegati
+      if (typeof loadAttachments === 'function') {
+        loadAttachments();
+      } else {
+        window.location.reload();
+      }
+    } else {
+      return response.json().then(error => {
+        throw new Error(error.error || 'Errore nell\'eliminazione');
+      });
+    }
+  })
+  .catch(error => {
+    console.error('Errore nell\'eliminazione allegato:', error);
+    alert('Errore nell\'eliminazione: ' + error.message);
+  });
+};
+</script>
+
+  <!-- Notes JavaScript -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+    const noteForm = document.getElementById('noteForm');
+    const noteArticolo = document.getElementById('noteArticolo');
+    const noteText = document.getElementById('noteText');
+    const notesContainer = document.getElementById('notesContainer');
+    const seriale = '{{ seriale }}';
+
+    // Formatta timestamp
+    function formatTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleString('it-IT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Carica note
+    async function loadNotes() {
+      try {
+        const response = await fetch(`/api/order/${seriale}/notes`);
+        const notes = await response.json();
+        
+        if (notes.length === 0) {
+          notesContainer.innerHTML = `
+            <div class="text-center py-8">
+              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-gray-900">Nessuna nota</h3>
+              <p class="mt-1 text-sm text-gray-500">Aggiungi la prima nota per questo ordine.</p>
+            </div>
+          `;
+        } else {
+          notesContainer.innerHTML = `
+            <div class="space-y-4">
+              ${notes.map(note => `
+                <div class="bg-gray-50 rounded-lg p-4">
+                  <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <span class="text-sm font-medium text-gray-900">${note.operatore}</span>
+                        <span class="text-xs text-gray-500">${formatTimestamp(note.timestamp)}</span>
+                        ${note.articolo ? `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">${note.articolo}</span>` : ''}
+                      </div>
+                      <p class="text-gray-700">${note.nota}</p>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        // Aggiorna badge per cassieri
+        const badge = document.getElementById('orderNotesBadge');
+        const countSpan = document.getElementById('orderNotesCount');
+        if (badge && countSpan) {
+          if (notes.length > 0) {
+            badge.classList.remove('hidden');
+            countSpan.textContent = notes.length;
+          } else {
+            badge.classList.add('hidden');
+            countSpan.textContent = '0';
+          }
+        }
+      } catch (error) {
+        console.error('Errore nel caricamento note:', error);
+        notesContainer.innerHTML = `
+          <div class="text-center py-8">
+            <svg class="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Errore nel caricamento</h3>
+            <p class="mt-1 text-sm text-gray-500">Impossibile caricare le note.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Aggiungi nota (funzione globale)
+    window.addNote = async function(articolo, nota) {
+      try {
+        const formData = new FormData();
+        if (articolo) formData.append('articolo', articolo);
+        formData.append('nota', nota);
+        
+        const response = await fetch(`/api/order/${seriale}/notes`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (response.ok) {
+          if (noteText) noteText.value = '';
+          if (noteArticolo) noteArticolo.value = '';
+          
+          // Pulisci i dati salvati
+          localStorage.removeItem(`formData_${seriale}`);
+          
+          await loadNotes();
+        } else {
+          const error = await response.json();
+          alert('Errore nell\'aggiunta della nota: ' + error.error);
+        }
+      } catch (error) {
+        console.error('Errore nell\'aggiunta della nota:', error);
+        alert('Errore nell\'aggiunta della nota');
+      }
+    }
+
+    // Event listeners
+    noteForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const articolo = noteArticolo.value.trim();
+      const nota = noteText.value.trim();
+      
+      if (!nota) {
+        alert('Inserisci una nota');
+        return;
+      }
+      
+      addNote(articolo, nota);
+    });
+
+    // Carica note all'avvio
+    loadNotes();
+
+    // Gestione allegati
+    const attachmentsContainer = document.getElementById('attachmentsContainer');
+    const attachmentForm = document.getElementById('attachmentForm');
+    const attachmentArticolo = document.getElementById('attachmentArticolo');
+    const attachmentFile = document.getElementById('attachmentFile');
+    const attachmentNote = document.getElementById('attachmentNote');
+
+    // Carica allegati
+    async function loadAttachments() {
+      try {
+        const response = await fetch(`/api/order/${seriale}/attachments`);
+        const attachments = await response.json();
+        
+        if (attachments.length === 0) {
+          attachmentsContainer.innerHTML = `
+            <div class="text-center py-8">
+              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-gray-900">Nessun allegato</h3>
+              <p class="mt-1 text-sm text-gray-500">Carica foto o documenti per questo ordine.</p>
+            </div>
+          `;
+        } else {
+          attachmentsContainer.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${attachments.map(att => `
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-gray-900">${att.original_filename}</span>
+                      </div>
+                      ${att.articolo ? `<p class="text-xs text-gray-600 mb-1">Articolo: ${att.articolo}</p>` : ''}
+                      ${att.note ? `<p class="text-xs text-gray-600 mb-2">${att.note}</p>` : ''}
+                      <p class="text-xs text-gray-500">${new Date(att.timestamp).toLocaleString('it-IT')}</p>
+                      <p class="text-xs text-gray-500">Operatore: ${att.operatore}</p>
+                    </div>
+                    <div class="flex space-x-1">
+                      <a href="${att.download_url}" class="text-blue-600 hover:text-blue-800" title="Scarica">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                      </a>
+                      ${att.operatore === '{{ current_user.username }}' || '{{ current_user.role }}' === 'cassiere' || '{{ current_user.role }}' === 'cassa' ? `
+                        <button onclick="deleteAttachment(${att.id})" class="text-red-600 hover:text-red-800" title="Elimina">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                          </svg>
+                        </button>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Errore nel caricamento allegati:', error);
+        attachmentsContainer.innerHTML = `
+          <div class="text-center py-8">
+            <svg class="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Errore nel caricamento</h3>
+            <p class="mt-1 text-sm text-gray-500">Impossibile caricare gli allegati.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Carica allegato
+    async function uploadAttachment(articolo, file, note) {
+      try {
+        const formData = new FormData();
+        if (articolo) formData.append('articolo', articolo);
+        formData.append('file', file);
+        if (note) formData.append('note', note);
+        
+        const response = await fetch(`/api/order/${seriale}/attachments`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (response.ok) {
+          if (attachmentFile) attachmentFile.value = '';
+          if (attachmentNote) attachmentNote.value = '';
+          if (attachmentArticolo) attachmentArticolo.value = '';
+          
+          // Pulisci i dati salvati
+          localStorage.removeItem(`formData_${seriale}`);
+          
+          await loadAttachments();
+        } else {
+          const error = await response.json();
+          alert('Errore nel caricamento: ' + error.error);
+        }
+      } catch (error) {
+        console.error('Errore nel caricamento allegato:', error);
+        alert('Errore nel caricamento allegato');
+      }
+    }
+
+    // Elimina allegato
+    async function deleteAttachment(attachmentId) {
+      if (!confirm('Sei sicuro di voler eliminare questo allegato?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/attachments/${attachmentId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          await loadAttachments();
+        } else {
+          const error = await response.json();
+          alert('Errore nell\'eliminazione: ' + error.error);
+        }
+      } catch (error) {
+        console.error('Errore nell\'eliminazione allegato:', error);
+        alert('Errore nell\'eliminazione allegato');
+      }
+    }
+
+    // Event listeners per allegati
+    attachmentForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const articolo = attachmentArticolo.value.trim();
+      const file = attachmentFile.files[0];
+      const note = attachmentNote.value.trim();
+      
+      if (!file) {
+        alert('Seleziona un file');
+        return;
+      }
+      
+      uploadAttachment(articolo, file, note);
+    });
+
+    // Carica allegati all'avvio
+    loadAttachments();
+    
+    // Ripristina contenuto form se presente
+    restoreFormContent();
+
+    // Refresh automatico ogni 30 secondi
+    let refreshInterval;
+    let isUserTyping = false;
+    let lastTypingTime = 0;
+    
+    // Salva il contenuto dei form prima del refresh
+    function saveFormContent() {
+      const formData = {};
+      
+      // Salva contenuto note
+      const noteText = document.getElementById('noteText');
+      if (noteText) {
+        formData.noteText = noteText.value;
+      }
+      
+      // Salva contenuto allegati
+      const attachmentNote = document.getElementById('attachmentNote');
+      if (attachmentNote) {
+        formData.attachmentNote = attachmentNote.value;
+      }
+      
+      // Salva articolo selezionato per allegati
+      const attachmentArticolo = document.getElementById('attachmentArticolo');
+      if (attachmentArticolo) {
+        formData.attachmentArticolo = attachmentArticolo.value;
+      }
+      
+      // Salva nel localStorage
+      localStorage.setItem(`formData_${seriale}`, JSON.stringify(formData));
+    }
+    
+    // Ripristina il contenuto dei form dopo il refresh
+    function restoreFormContent() {
+      const savedData = localStorage.getItem(`formData_${seriale}`);
+      if (savedData) {
+        try {
+          const formData = JSON.parse(savedData);
+          
+          // Ripristina note
+          const noteText = document.getElementById('noteText');
+          if (noteText && formData.noteText) {
+            noteText.value = formData.noteText;
+          }
+          
+          // Ripristina allegati
+          const attachmentNote = document.getElementById('attachmentNote');
+          if (attachmentNote && formData.attachmentNote) {
+            attachmentNote.value = formData.attachmentNote;
+          }
+          
+          // Ripristina articolo selezionato
+          const attachmentArticolo = document.getElementById('attachmentArticolo');
+          if (attachmentArticolo && formData.attachmentArticolo) {
+            attachmentArticolo.value = formData.attachmentArticolo;
+          }
+          
+          // Pulisci i dati salvati
+          localStorage.removeItem(`formData_${seriale}`);
+        } catch (error) {
+          console.error('Errore nel ripristino form:', error);
+        }
+      }
+    }
+    
+    // Controlla se l'utente sta scrivendo
+    function checkUserActivity() {
+      const now = Date.now();
+      isUserTyping = (now - lastTypingTime) < 5000; // 5 secondi di inattività
+    }
+    
+    // Event listeners per rilevare attività utente
+    document.addEventListener('input', function(e) {
+      if (e.target.matches('#noteText, #attachmentNote, #attachmentArticolo')) {
+        lastTypingTime = Date.now();
+        isUserTyping = true;
+      }
+    });
+    
+    document.addEventListener('keydown', function(e) {
+      if (e.target.matches('#noteText, #attachmentNote, #attachmentArticolo')) {
+        lastTypingTime = Date.now();
+        isUserTyping = true;
+      }
+    });
+    
+    async function checkForUpdates() {
+      try {
+        // Controlla se l'utente sta scrivendo
+        checkUserActivity();
+        
+        // Se l'utente sta scrivendo, salva il contenuto ma non ricaricare
+        if (isUserTyping) {
+          console.log('👤 Utente sta scrivendo - Salvo contenuto ma non ricarico');
+          saveFormContent();
+          return;
+        }
+        
+        console.log('🔍 Controllo aggiornamenti per ordine:', seriale);
+        const response = await fetch('/api/refresh');
+        const data = await response.json();
+        
+        console.log('📊 Risposta API refresh:', data);
+        
+        if (data.has_changes && data.modified_orders.includes(seriale)) {
+          console.log('🔄 Modifiche rilevate - Ricarico pagina...');
+          // Salva contenuto form prima del refresh
+          saveFormContent();
+          // Mostra notifica
+          showUpdateNotification();
+          // Ricarica la pagina dopo 2 secondi
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          console.log('✅ Nessuna modifica rilevata per questo ordine');
+        }
+      } catch (error) {
+        console.error('Errore nel controllo aggiornamenti:', error);
+      }
+    }
+
+    function showUpdateNotification() {
+      // Crea notifica visiva
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2';
+      notification.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        <span>Aggiornamento ordine in corso...</span>
+      `;
+      document.body.appendChild(notification);
+      
+      // Rimuovi notifica dopo 3 secondi
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 3000);
+    }
+
+    // Avvia il controllo automatico
+    console.log('🚀 Avvio controllo automatico aggiornamenti ogni 30 secondi');
+    refreshInterval = setInterval(checkForUpdates, 30000); // Ogni 30 secondi
+
+    // Pulisci l'intervallo quando la pagina viene chiusa
+    window.addEventListener('beforeunload', () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    });
+    });
+  </script>
+{% endblock %}

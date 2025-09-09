@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">📦 Magazzino</h1>
+        <p class="text-gray-600">Gestisci e monitora le scorte del magazzino</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="mb-6">
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+            <input type="text" id="searchInput" placeholder="Cerca per codice articolo, descrizione, categoria..." 
+                   class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm">
+            <button id="clearSearch" class="absolute inset-y-0 right-0 pr-3 flex items-center hidden">
+                <svg class="h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stock Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Codice Articolo</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo Disponibile</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
+                    </tr>
+                </thead>
+                <tbody id="stockTableBody" class="bg-white divide-y divide-gray-200">
+                    <!-- I dati verranno caricati via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="text-center py-12">
+        <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-gray-600">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Caricamento dati magazzino...
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">Nessun articolo trovato</h3>
+        <p class="mt-1 text-sm text-gray-500">Prova a modificare i criteri di ricerca.</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const clearSearch = document.getElementById('clearSearch');
+    const stockTableBody = document.getElementById('stockTableBody');
+    const loadingState = document.getElementById('loadingState');
+    const emptyState = document.getElementById('emptyState');
+
+    function getStatusBadgeClass(quantity) {
+        if (quantity > 10) return 'bg-green-100 text-green-800';
+        if (quantity > 0) return 'bg-yellow-100 text-yellow-800';
+        return 'bg-red-100 text-red-800';
+    }
+
+    function getStatusText(quantity) {
+        if (quantity > 10) return 'Disponibile';
+        if (quantity > 0) return 'Scorta Bassa';
+        return 'Esaurito';
+    }
+
+    function filterStock() {
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const rows = stockTableBody.querySelectorAll('tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            if (text.includes(searchTerm)) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Mostra/nascondi il pulsante di pulizia
+        if (searchTerm) {
+            clearSearch.classList.remove('hidden');
+        } else {
+            clearSearch.classList.add('hidden');
+        }
+
+        // Mostra/nascondi lo stato vuoto
+        if (visibleCount === 0 && searchTerm) {
+            emptyState.classList.remove('hidden');
+            stockTableBody.style.display = 'none';
+        } else {
+            emptyState.classList.add('hidden');
+            stockTableBody.style.display = '';
+        }
+    }
+
+    // Event listeners
+    searchInput.addEventListener('input', filterStock);
+    
+    clearSearch.addEventListener('click', function() {
+        searchInput.value = '';
+        filterStock();
+        searchInput.focus();
+    });
+
+    // Carica i dati del magazzino
+    fetch('/api/magazzino')
+        .then(response => response.json())
+        .then(data => {
+            loadingState.style.display = 'none';
+            
+            if (data.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            stockTableBody.innerHTML = data.map(item => `
+                <tr class="stock-row hover:bg-gray-50 transition-colors duration-200">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${item.Codice_Articolo || 'N/A'}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">${item.Descrizione || 'N/A'}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${item.Categoria || 'N/A'}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${item.Saldo_Disponibile || 0}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(item.Saldo_Disponibile)}">
+                            ${getStatusText(item.Saldo_Disponibile)}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Inizializza il filtro
+            filterStock();
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento dei dati:', error);
+            loadingState.style.display = 'none';
+            emptyState.classList.remove('hidden');
+        });
+});
+</script>
+{% endblock %}

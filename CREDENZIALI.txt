@@ -1,0 +1,89 @@
+CREDENZIALI DI ACCESSO - SISTEMA GESTIONE ORDINI ZARRELLA
+
+===========================================
+UTENTI PICKER (per reparto)
+===========================================
+
+Username: picker_rep01
+Password: pass
+Reparto: PROFILATI
+
+Username: picker_rep02
+Password: pass
+Reparto: LAMIERE
+
+Username: picker_rep03
+Password: pass
+Reparto: TUBOLARI
+
+Username: picker_rep04
+Password: pass
+Reparto: EDILE
+
+Username: picker_rep05
+Password: pass
+Reparto: TRAVI
+
+Username: picker_rep06
+Password: pass
+Reparto: COIBENTATI
+
+Username: picker_rep07
+Password: pass
+Reparto: RECINZIONI
+
+Username: picker_rep08
+Password: pass
+Reparto: FERRAMENTA
+
+Username: picker_rep09
+Password: pass
+Reparto: BOMBOLE
+
+===========================================
+UTENTI CASSIERE
+===========================================
+
+Username: cassier1
+Password: pass
+Ruolo: Cassiere (vede tutti gli ordini)
+
+===========================================
+UTENTE DISPLAY PUBBLICO
+===========================================
+
+Username: display
+Password: display
+Ruolo: Display pubblico (per TV)
+
+===========================================
+ISTRUZIONI
+===========================================
+
+1. PICKER:
+   - Selezionare il proprio reparto dal menu a tendina
+   - Vedranno solo gli ordini del loro reparto
+   - Possono modificare quantità e unità di misura
+   - Possono aggiungere note e allegati
+   - Possono cambiare lo stato dell'ordine
+
+2. CASSIERE:
+   - Non serve selezionare reparto
+   - Vedono tutti gli ordini
+   - Possono stampare gli ordini
+   - Vedono lo stato di tutti i reparti
+
+3. DISPLAY:
+   - Non serve selezionare reparto
+   - Visualizzazione pubblica per TV
+   - Mostra solo ordini con note contenenti "ritiro"
+   - Aggiornamento automatico ogni 30 secondi
+
+===========================================
+NOTE IMPORTANTI
+===========================================
+
+- Tutte le password sono: "pass" (tranne display che è "display")
+- Il sistema si aggiorna automaticamente ogni 30 secondi
+- Gli ordini modificati nel gestionale vengono rilevati automaticamente
+- Le righe rimosse/sostituite vengono mantenute in grigio per tracciabilità 

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Pubblico - Stato Ordini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #ffffff 0%, #fef7ed 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        
+        .display-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: #ea580c;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-shadow: 2px 2px 4px rgba(234,88,12,0.2);
+        }
+        
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        .refresh-indicator {
+            background: rgba(234,88,12,0.1);
+            color: #ea580c;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+        
+        .reparti-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .reparto-card {
+            background: rgba(255,255,255,0.95);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            animation: fadeIn 0.6s ease-in-out;
+        }
+        
+        .reparto-header {
+            background: linear-gradient(135deg, #ea580c, #f97316);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        
+        .reparto-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .status-section {
+            flex: 1;
+        }
+        
+        .status-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: bold;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .status-title.in-preparazione {
+            background: #fed7aa;
+            color: #ea580c;
+        }
+        
+        .status-title.pronto {
+            background: #fbbf24;
+            color: #92400e;
+        }
+        
+        .ordini-list {
+            min-height: 40px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .ordine-number {
+            background: #f3f4f6;
+            color: #374151;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            border: 1px solid #e5e7eb;
+            white-space: nowrap;
+        }
+        
+        .ordine-number.in-preparazione {
+            background: #fed7aa;
+            color: #ea580c;
+            border-color: #f97316;
+            animation: pulse 2s infinite;
+        }
+        
+        .ordine-number.pronto {
+            background: #fbbf24;
+            color: #92400e;
+            border-color: #f59e0b;
+        }
+        
+        .ordine-number.storico {
+            background: #e5e7eb;
+            color: #6b7280;
+            border-color: #d1d5db;
+            opacity: 0.7;
+            font-style: italic;
+        }
+        
+        .empty-state {
+            color: #9ca3af;
+            font-style: italic;
+            text-align: center;
+            padding: 10px;
+            font-size: 0.8rem;
+        }
+        
+        .storico-section {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .storico-header {
+            text-align: center;
+            color: #ea580c;
+            margin-bottom: 15px;
+        }
+        
+        .storico-header h3 {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 0;
+            text-shadow: 1px 1px 2px rgba(234,88,12,0.2);
+        }
+        
+        .storico-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .storico-card {
+            background: rgba(234,88,12,0.1);
+            border-radius: 8px;
+            padding: 10px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(234,88,12,0.2);
+        }
+        
+        .storico-reparto-title {
+            color: #ea580c;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .storico-ordini {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            justify-content: center;
+        }
+        
+        .storico-ordine {
+            background: rgba(234,88,12,0.2);
+            color: #ea580c;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .storico-vuoto {
+            color: rgba(234,88,12,0.6);
+            font-style: italic;
+            font-size: 0.75rem;
+        }
+        
+        .timestamp {
+            text-align: center;
+            color: #ea580c;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .reparti-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .reparto-card {
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="display-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📋 STATO ORDINI</h1>
+            <p>Visualizzazione in tempo reale degli ordini con ritiro</p>
+        </div>
+        
+        <!-- Refresh Indicator -->
+        <div id="refreshIndicator" class="refresh-indicator">
+            🔄 Aggiornamento in corso...
+        </div>
+        
+        <!-- Reparti Grid -->
+        <div class="reparti-grid">
+            {% for codice, nome in reparti %}
+            <div class="reparto-card fade-in">
+                <div class="reparto-header">
+                    <div class="flex items-center justify-center gap-2">
+                        {% if 'PROFILATI' in nome or 'LAMIERE' in nome or 'TUBOLARI' in nome %}
+                            🔧
+                        {% elif 'EDILE' in nome %}
+                            🏗️
+                        {% elif 'TRAVI' in nome %}
+                            🏗️
+                        {% elif 'COIBENTATI' in nome or 'RECINZIONI' in nome %}
+                            🔧
+                        {% elif 'FERRAMENTA' in nome %}
+                            🔧
+                        {% elif 'BOMBOLE' in nome %}
+                            🔧
+                        {% else %}
+                            📦
+                        {% endif %}
+                        {{ nome }}
+                    </div>
+                </div>
+                
+                <div class="reparto-content">
+                    <!-- Ordini in Preparazione -->
+                    <div class="status-section">
+                        <div class="status-title in-preparazione">
+                            <span>🔄</span>
+                            <span>IN PREPARAZIONE</span>
+                        </div>
+                        <div class="ordini-list">
+                            {% set reparto_info = reparto_data.get(codice, {}) %}
+                            {% set in_preparazione = reparto_info.get('in_preparazione', []) %}
+                            {% if in_preparazione %}
+                                {% set numeri_ordini = [] %}
+                                {% for ordine in in_preparazione %}
+                                    {% if ordine.numero_ordine not in numeri_ordini %}
+                                        {% set _ = numeri_ordini.append(ordine.numero_ordine) %}
+                                        <div class="ordine-number in-preparazione pulse-animation">
+                                            {{ ordine.numero_ordine }}
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-state">
+                                    Nessun ordine in preparazione
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Ordini Pronti -->
+                    <div class="status-section">
+                        <div class="status-title pronto">
+                            <span>✅</span>
+                            <span>PRONTI</span>
+                        </div>
+                        <div class="ordini-list">
+                            {% set pronti = reparto_info.get('pronti', []) %}
+                            {% if pronti %}
+                                {% set numeri_ordini = [] %}
+                                {% for ordine in pronti %}
+                                    {% if ordine.numero_ordine not in numeri_ordini %}
+                                        {% set _ = numeri_ordini.append(ordine.numero_ordine) %}
+                                        {% if ordine.get('storico', False) %}
+                                            <!-- Ordine nello storico (più di 90 minuti ma meno di 4 ore) -->
+                                            <div class="ordine-number storico" title="Storico (oltre 90 minuti)">
+                                                {{ ordine.numero_ordine }}
+                                            </div>
+                                        {% else %}
+                                            <!-- Ordine nel display principale (meno di 90 minuti) -->
+                                            <div class="ordine-number pronto">
+                                                {{ ordine.numero_ordine }}
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-state">
+                                    Nessun ordine pronto
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Sezione Storico Ordini (ultimi 4 ore) -->
+        <div class="storico-section">
+            <div class="storico-header">
+                <h3>📋 STORICO ORDINI (Ultimi 4 ore)</h3>
+            </div>
+            <div class="storico-grid">
+                {% for codice, nome in reparti %}
+                <div class="storico-card">
+                    <div class="storico-reparto-title">{{ nome }}</div>
+                    <div class="storico-ordini">
+                        {% set reparto_info = reparto_data.get(codice, {}) %}
+                        {% set ordini_storico = [] %}
+                        {% for ordine in reparto_info.get('pronti', []) %}
+                            {% if ordine.get('storico', False) %}
+                                {% set _ = ordini_storico.append(ordine) %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if ordini_storico %}
+                            {% set numeri_ordini = [] %}
+                            {% for ordine in ordini_storico %}
+                                {% if ordine.numero_ordine not in numeri_ordini %}
+                                    {% set _ = numeri_ordini.append(ordine.numero_ordine) %}
+                                    <span class="storico-ordine">{{ ordine.numero_ordine }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <span class="storico-vuoto">Nessun ordine</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Timestamp -->
+        <div class="timestamp" id="timestamp">
+            Aggiornato: <span id="lastUpdate"></span>
+        </div>
+    </div>
+
+    <script>
+        let lastDataHash = null;
+        let refreshInterval = null;
+        
+        // Funzione per calcolare un hash dei dati attuali
+        function calculateDataHash() {
+            const repartiGrid = document.querySelector('.reparti-grid');
+            if (!repartiGrid) return null;
+            
+            // Crea un hash basato sul contenuto HTML dei numeri d'ordine
+            const ordineNumbers = repartiGrid.querySelectorAll('.ordine-number');
+            let hash = '';
+            ordineNumbers.forEach(el => {
+                hash += el.textContent.trim() + '|';
+            });
+            return hash;
+        }
+        
+        // Funzione per controllare se ci sono cambiamenti
+        async function checkForChanges() {
+            try {
+                const response = await fetch('/api/display/status');
+                const data = await response.json();
+                
+                if (data.has_changes) {
+                    console.log('🔄 Cambiamenti rilevati, aggiornamento pagina...');
+                    location.reload();
+                } else {
+                    console.log('✅ Nessun cambiamento rilevato');
+                }
+            } catch (error) {
+                console.error('❌ Errore nel controllo cambiamenti:', error);
+            }
+        }
+        
+        // Aggiorna timestamp
+        function updateTimestamp() {
+            const now = new Date();
+            const timeString = now.toLocaleString('it-IT', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('lastUpdate').textContent = timeString;
+        }
+        
+        // Aggiorna la pagina ogni 30 secondi
+        function refreshPage() {
+            // Mostra indicatore di refresh
+            const indicator = document.getElementById('refreshIndicator');
+            indicator.style.display = 'block';
+            
+            // Aggiorna timestamp
+            updateTimestamp();
+            
+            // Ricarica la pagina dopo 2 secondi
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+        
+        // Inizializza
+        updateTimestamp();
+        
+        // Controllo intelligente ogni 30 secondi - solo se ci sono cambiamenti
+        refreshInterval = setInterval(checkForChanges, 30000);
+        
+        // Aggiorna timestamp ogni secondo
+        setInterval(updateTimestamp, 1000);
+        
+        // Aggiungi animazioni per i nuovi elementi
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.reparto-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pianifica Tratta - Sistema Trasporti</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .truck-card {
+            transition: all 0.3s ease;
+        }
+        .truck-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        .truck-card.selected {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+        .service-flag {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .service-available {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .service-unavailable {
+            background-color: #fef2f2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-4">
+                        <a href="/trasporti" class="text-gray-600 hover:text-gray-900">
+                            <i class="fas fa-arrow-left text-xl"></i>
+                        </a>
+                        <h1 class="text-2xl font-bold text-gray-900">Pianifica Nuova Tratta</h1>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        <i class="fas fa-calendar-alt mr-1"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <form id="routeForm" class="space-y-8">
+                <!-- Step 1: Informazioni Base -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                        Informazioni Base
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="routeName" class="block text-sm font-medium text-gray-700 mb-2">
+                                Nome alla Consegna *
+                            </label>
+                            <input type="text" id="routeName" name="routeName" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="Es: Consegna Napoli Centro">
+                        </div>
+                        <div>
+                            <label for="startAddress" class="block text-sm font-medium text-gray-700 mb-2">
+                                Indirizzo di Partenza *
+                            </label>
+                            <input type="text" id="startAddress" name="startAddress" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   value="Via Padula,4 Nocera Inferiore (SA)" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Selezione Ordini -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-shopping-cart text-green-600 mr-2"></i>
+                        Selezione Ordini
+                    </h2>
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-gray-700">Ordini Disponibili</span>
+                            <button type="button" id="selectAllBtn" class="text-sm text-blue-600 hover:text-blue-800">
+                                Seleziona Tutti
+                            </button>
+                        </div>
+                        <div id="ordersList" class="max-h-64 overflow-y-auto border border-gray-200 rounded-md p-4 bg-gray-50">
+                            <div class="text-center text-gray-500 py-8">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Caricamento ordini...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="selectedOrdersSummary" class="hidden">
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">Ordini Selezionati:</h3>
+                        <div id="selectedOrdersList" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Indirizzi di Consegna -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>
+                        Indirizzi di Consegna
+                    </h2>
+                    <div id="deliveryAddresses" class="space-y-3">
+                        <div class="text-center text-gray-500 py-4">
+                            <i class="fas fa-info-circle text-xl mb-2"></i>
+                            <p>Gli indirizzi di consegna verranno assegnati automaticamente dagli ordini selezionati</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Selezione Operatore -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-user text-purple-600 mr-2"></i>
+                        Selezione Operatore
+                    </h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="operator" value="Giovanni Zarrella" class="mr-3">
+                            <div>
+                                <div class="font-medium">Giovanni Zarrella</div>
+                                <div class="text-sm text-gray-500">Operatore Senior</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="operator" value="Giuseppe Della Porta" class="mr-3">
+                            <div>
+                                <div class="font-medium">Giuseppe Della Porta</div>
+                                <div class="text-sm text-gray-500">Operatore</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="operator" value="Armando" class="mr-3">
+                            <div>
+                                <div class="font-medium">Armando</div>
+                                <div class="text-sm text-gray-500">Operatore</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="operator" value="Mimmo" class="mr-3">
+                            <div>
+                                <div class="font-medium">Mimmo</div>
+                                <div class="text-sm text-gray-500">Operatore</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 5: Selezione Camion -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-truck text-orange-600 mr-2"></i>
+                        Selezione Camion
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="trucksGrid">
+                        <!-- Esempio Camion 1 -->
+                        <div class="truck-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer" data-truck-id="1">
+                            <div class="text-center mb-4">
+                                <div class="w-full h-32 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center mb-3">
+                                    <i class="fas fa-truck text-4xl text-blue-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-lg">Fiat Ducato</h3>
+                                <p class="text-sm text-gray-600">Furgone Medio</p>
+                            </div>
+                            
+                            <!-- Specifiche Tecniche -->
+                            <div class="space-y-2 mb-4">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Portata:</span>
+                                    <span class="font-medium">1.200 kg</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Volume:</span>
+                                    <span class="font-medium">8 m³</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Dimensioni:</span>
+                                    <span class="font-medium">5.4 x 2.0 x 2.1 m</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Consumo:</span>
+                                    <span class="font-medium">12 km/l</span>
+                                </div>
+                            </div>
+
+                            <!-- Servizi Disponibili -->
+                            <div class="mb-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">Servizi:</h4>
+                                <div class="flex flex-wrap gap-1">
+                                    <span class="service-flag service-available">Carico Manuale</span>
+                                    <span class="service-flag service-available">Scarico Manuale</span>
+                                    <span class="service-flag service-available">Montacarichi</span>
+                                    <span class="service-flag service-unavailable">Gru</span>
+                                    <span class="service-flag service-unavailable">Frigorifero</span>
+                                </div>
+                            </div>
+
+                            <!-- Stato Disponibilità -->
+                            <div class="text-center">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <i class="fas fa-check-circle mr-1"></i>
+                                    Disponibile
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Esempio Camion 2 -->
+                        <div class="truck-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer" data-truck-id="2">
+                            <div class="text-center mb-4">
+                                <div class="w-full h-32 bg-gradient-to-br from-green-100 to-green-200 rounded-lg flex items-center justify-center mb-3">
+                                    <i class="fas fa-truck text-4xl text-green-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-lg">Iveco Daily</h3>
+                                <p class="text-sm text-gray-600">Furgone Grande</p>
+                            </div>
+                            
+                            <!-- Specifiche Tecniche -->
+                            <div class="space-y-2 mb-4">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Portata:</span>
+                                    <span class="font-medium">3.500 kg</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Volume:</span>
+                                    <span class="font-medium">15 m³</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Dimensioni:</span>
+                                    <span class="font-medium">6.0 x 2.2 x 2.4 m</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Consumo:</span>
+                                    <span class="font-medium">10 km/l</span>
+                                </div>
+                            </div>
+
+                            <!-- Servizi Disponibili -->
+                            <div class="mb-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">Servizi:</h4>
+                                <div class="flex flex-wrap gap-1">
+                                    <span class="service-flag service-available">Carico Manuale</span>
+                                    <span class="service-flag service-available">Scarico Manuale</span>
+                                    <span class="service-flag service-available">Montacarichi</span>
+                                    <span class="service-flag service-available">Gru</span>
+                                    <span class="service-flag service-unavailable">Frigorifero</span>
+                                </div>
+                            </div>
+
+                            <!-- Stato Disponibilità -->
+                            <div class="text-center">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <i class="fas fa-check-circle mr-1"></i>
+                                    Disponibile
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Esempio Camion 3 -->
+                        <div class="truck-card border-2 border-gray-200 rounded-lg p-4 cursor-pointer" data-truck-id="3">
+                            <div class="text-center mb-4">
+                                <div class="w-full h-32 bg-gradient-to-br from-red-100 to-red-200 rounded-lg flex items-center justify-center mb-3">
+                                    <i class="fas fa-truck text-4xl text-red-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-lg">Mercedes Sprinter</h3>
+                                <p class="text-sm text-gray-600">Furgone Frigorifero</p>
+                            </div>
+                            
+                            <!-- Specifiche Tecniche -->
+                            <div class="space-y-2 mb-4">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Portata:</span>
+                                    <span class="font-medium">2.000 kg</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Volume:</span>
+                                    <span class="font-medium">12 m³</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Dimensioni:</span>
+                                    <span class="font-medium">5.8 x 2.1 x 2.2 m</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">Consumo:</span>
+                                    <span class="font-medium">11 km/l</span>
+                                </div>
+                            </div>
+
+                            <!-- Servizi Disponibili -->
+                            <div class="mb-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">Servizi:</h4>
+                                <div class="flex flex-wrap gap-1">
+                                    <span class="service-flag service-available">Carico Manuale</span>
+                                    <span class="service-flag service-available">Scarico Manuale</span>
+                                    <span class="service-flag service-available">Montacarichi</span>
+                                    <span class="service-flag service-unavailable">Gru</span>
+                                    <span class="service-flag service-available">Frigorifero</span>
+                                </div>
+                            </div>
+
+                            <!-- Stato Disponibilità -->
+                            <div class="text-center">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    In Uso
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6: Calcolo e Riepilogo -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-calculator text-indigo-600 mr-2"></i>
+                        Calcolo Tratta
+                    </h2>
+                    <div id="routeCalculation" class="hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-road text-blue-600 text-xl mr-3"></i>
+                                    <div>
+                                        <div class="text-sm text-blue-600">Distanza Totale</div>
+                                        <div class="text-2xl font-bold text-blue-800" id="totalDistance">-- km</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-clock text-green-600 text-xl mr-3"></i>
+                                    <div>
+                                        <div class="text-sm text-green-600">Tempo Stimato</div>
+                                        <div class="text-2xl font-bold text-green-800" id="totalTime">-- min</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-purple-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-tint text-purple-600 text-xl mr-3"></i>
+                                    <div>
+                                        <div class="text-sm text-purple-600">Litri Carburante</div>
+                                        <div class="text-2xl font-bold text-purple-800" id="totalLitri">-- l</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-orange-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-gas-pump text-orange-600 text-xl mr-3"></i>
+                                    <div>
+                                        <div class="text-sm text-orange-600">Costo Carburante</div>
+                                        <div class="text-2xl font-bold text-orange-800" id="fuelCost">-- €</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-red-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-euro-sign text-red-600 text-xl mr-3"></i>
+                                    <div>
+                                        <div class="text-sm text-red-600">Prezzo Totale</div>
+                                        <div class="text-2xl font-bold text-red-800" id="totalPrice">-- €</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="calculationPlaceholder" class="text-center text-gray-500 py-8">
+                        <i class="fas fa-info-circle text-2xl mb-2"></i>
+                        <p>Seleziona gli ordini e il camion per calcolare la tratta</p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-between items-center pt-6">
+                    <a href="/trasporti" class="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Annulla
+                    </a>
+                    <div class="flex space-x-4">
+                        <button type="button" id="calculateBtn" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-calculator mr-2"></i>
+                            Calcola Tratta
+                        </button>
+                        <button type="submit" id="saveBtn" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-save mr-2"></i>
+                            Salva Tratta
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Inizializzazione
+        document.addEventListener('DOMContentLoaded', function() {
+            // Imposta data corrente
+            const now = new Date();
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('it-IT');
+            
+            // Carica ordini
+            loadOrders();
+            
+            // Event listeners
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Selezione camion
+            document.querySelectorAll('.truck-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    // Rimuovi selezione precedente
+                    document.querySelectorAll('.truck-card').forEach(c => c.classList.remove('selected'));
+                    // Aggiungi selezione corrente
+                    this.classList.add('selected');
+                    updateCalculationButton();
+                });
+            });
+
+            // Bottone calcola tratta
+            const calculateBtn = document.getElementById('calculateBtn');
+            console.log('🔍 Bottone calcola trovato:', calculateBtn);
+            if (calculateBtn) {
+                calculateBtn.addEventListener('click', function() {
+                    console.log('🖱️ Bottone calcola cliccato!');
+                    calculateRoute();
+                });
+            } else {
+                console.error('❌ Bottone calcola non trovato!');
+            }
+            
+            // Bottone seleziona tutti
+            document.getElementById('selectAllBtn').addEventListener('click', toggleSelectAll);
+            
+            // Form submit
+            document.getElementById('routeForm').addEventListener('submit', saveRoute);
+        }
+
+        function loadOrders() {
+            console.log('🔄 Caricamento ordini...');
+            fetch('/api/trasporti/orders')
+                .then(response => {
+                    console.log('📡 Risposta API:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📄 Dati ricevuti:', data);
+                    // Gestisce sia il formato nuovo (con success) che quello vecchio (array diretto)
+                    if (data.success && data.orders) {
+                        console.log('✅ Formato nuovo, ordini:', data.orders.length);
+                        renderOrders(data.orders);
+                    } else if (Array.isArray(data)) {
+                        console.log('✅ Formato array diretto, ordini:', data.length);
+                        renderOrders(data);
+                    } else {
+                        console.log('❌ Formato non riconosciuto');
+                        document.getElementById('ordersList').innerHTML = 
+                            '<div class="text-center text-red-500 py-8"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Errore nel caricamento ordini</p></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Errore:', error);
+                    document.getElementById('ordersList').innerHTML = 
+                        '<div class="text-center text-red-500 py-8"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Errore di connessione</p></div>';
+                });
+        }
+
+        function renderOrders(orders) {
+            const ordersList = document.getElementById('ordersList');
+            
+            if (orders.length === 0) {
+                ordersList.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fas fa-inbox text-2xl mb-2"></i><p>Nessun ordine disponibile</p></div>';
+                return;
+            }
+
+            const ordersHtml = orders.map(order => `
+                <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 mb-2">
+                    <input type="checkbox" name="selectedOrders" value="${order.seriale}" class="mr-3 order-checkbox">
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-medium">Ordine #${order.numero_ordine || order.seriale}</div>
+                                <div class="text-sm text-gray-600">${order.cliente || order.nome_cliente || 'Cliente non specificato'}</div>
+                                <div class="text-sm text-gray-500">Seriale: ${order.seriale} | ${order.data_ordine || 'Data non disponibile'}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-medium">${order.peso_totale_kg || '0'} kg</div>
+                                <div class="text-xs text-gray-500">${order.numero_righe || 0} articoli</div>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            `).join('');
+
+            ordersList.innerHTML = ordersHtml;
+
+            // Aggiungi event listener per checkbox
+            document.querySelectorAll('.order-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedOrders);
+            });
+        }
+
+        function updateSelectedOrders() {
+            const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
+            const selectedOrdersSummary = document.getElementById('selectedOrdersSummary');
+            const selectedOrdersList = document.getElementById('selectedOrdersList');
+
+            if (selectedCheckboxes.length > 0) {
+                selectedOrdersSummary.classList.remove('hidden');
+                selectedOrdersList.innerHTML = Array.from(selectedCheckboxes).map(checkbox => {
+                    // Trova l'ordine corrispondente per ottenere il numero ordine
+                    const orderElement = checkbox.closest('label');
+                    const orderNumberElement = orderElement.querySelector('.font-medium');
+                    const orderNumber = orderNumberElement ? orderNumberElement.textContent.replace('Ordine #', '') : checkbox.value;
+                    
+                    return `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Ordine #${orderNumber}
+                    </span>`;
+                }).join('');
+            } else {
+                selectedOrdersSummary.classList.add('hidden');
+            }
+
+            updateCalculationButton();
+        }
+
+        function toggleSelectAll() {
+            const checkboxes = document.querySelectorAll('.order-checkbox');
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = !allChecked;
+            });
+
+            selectAllBtn.textContent = allChecked ? 'Seleziona Tutti' : 'Deseleziona Tutti';
+            updateSelectedOrders();
+        }
+
+        function updateCalculationButton() {
+            const selectedOrders = document.querySelectorAll('.order-checkbox:checked').length;
+            const selectedTruck = document.querySelector('.truck-card.selected');
+            const calculateBtn = document.getElementById('calculateBtn');
+            const saveBtn = document.getElementById('saveBtn');
+
+            const canCalculate = selectedOrders > 0 && selectedTruck;
+            
+            calculateBtn.disabled = !canCalculate;
+            saveBtn.disabled = !canCalculate;
+        }
+
+        function calculateRoute() {
+            console.log('🚀 Funzione calculateRoute chiamata!');
+            console.log('🔍 Elementi trovati:');
+            console.log('  - Checkbox ordini:', document.querySelectorAll('.order-checkbox:checked').length);
+            console.log('  - Camion selezionato:', document.querySelector('.truck-card.selected'));
+            console.log('  - Campo indirizzo:', document.getElementById('startAddress'));
+            
+            const selectedOrders = Array.from(document.querySelectorAll('.order-checkbox:checked')).map(cb => cb.value);
+            const selectedTruck = document.querySelector('.truck-card.selected');
+            const indirizzoPartenza = document.getElementById('startAddress').value;
+            
+            // Ottieni l'ID del camion selezionato
+            const truckId = selectedTruck.getAttribute('data-truck-id');
+            
+            console.log('📋 Dati raccolti:');
+            console.log('  - Ordini selezionati:', selectedOrders);
+            console.log('  - Camion selezionato:', selectedTruck);
+            console.log('  - ID Camion:', truckId);
+            console.log('  - Indirizzo partenza:', indirizzoPartenza);
+            
+            if (selectedOrders.length === 0 || !selectedTruck) {
+                alert('Seleziona almeno un ordine e un camion');
+                return;
+            }
+            
+            if (!indirizzoPartenza.trim()) {
+                alert('Inserisci l\'indirizzo di partenza');
+                return;
+            }
+
+            console.log('🚛 Calcolo tratta...');
+            console.log('  Ordini selezionati:', selectedOrders);
+            console.log('  Indirizzo partenza:', indirizzoPartenza);
+            
+            // Chiamata API reale per calcolare la tratta
+            fetch('/api/trasporti/calculate-route', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ordini_seriali: selectedOrders,
+                    indirizzo_partenza: indirizzoPartenza,
+                    indirizzi_selezionati: [], // Per ora usa il primo indirizzo di ogni ordine
+                    truck_id: truckId
+                })
+            })
+            .then(response => {
+                console.log('📡 Risposta API:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('📄 Dati ricevuti:', data);
+                
+                if (data.success) {
+                    // Mostra i risultati reali
+                    document.getElementById('totalDistance').textContent = data.distanza_totale_km + ' km';
+                    document.getElementById('totalTime').textContent = data.tempo_stimato_minuti + ' min';
+                    document.getElementById('totalLitri').textContent = data.litri_totali + ' l';
+                    document.getElementById('fuelCost').textContent = data.costo_carburante_euro + ' €';
+                    document.getElementById('totalPrice').textContent = data.prezzo_totale + ' €';
+                    
+                    const calculation = document.getElementById('routeCalculation');
+                    const placeholder = document.getElementById('calculationPlaceholder');
+                    calculation.classList.remove('hidden');
+                    placeholder.classList.add('hidden');
+                    
+                    console.log('✅ Calcolo completato');
+                } else {
+                    console.error('❌ Errore nel calcolo:', data.error);
+                    alert('Errore nel calcolo della tratta: ' + (data.error || 'Errore sconosciuto'));
+                }
+            })
+            .catch(error => {
+                console.error('❌ Errore di connessione:', error);
+                alert('Errore di connessione durante il calcolo della tratta');
+            });
+        }
+
+        function saveRoute(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const selectedOrders = Array.from(document.querySelectorAll('.order-checkbox:checked')).map(cb => cb.value);
+            const selectedTruck = document.querySelector('.truck-card.selected');
+            
+            if (selectedOrders.length === 0 || !selectedTruck) {
+                alert('Completa tutti i campi richiesti');
+                return;
+            }
+
+            // Qui andrebbe la chiamata API per salvare la tratta
+            alert('Tratta salvata con successo!');
+            window.location.href = '/trasporti';
+        }
+    </script>
+</body>
+</html>

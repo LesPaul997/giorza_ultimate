@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Trasporti - Gestione Consegne</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"></script>
+    <style>
+        .map-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .order-card {
+            transition: all 0.3s ease;
+        }
+        
+        .order-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-nuovo { background: #fef3c7; color: #92400e; }
+        .status-in_preparazione { background: #fed7aa; color: #ea580c; }
+        .status-pronto { background: #bbf7d0; color: #166534; }
+        
+        .fuel-cost-card {
+            background: linear-gradient(135deg, #1e40af, #3b82f6);
+            color: white;
+        }
+        
+        .route-card {
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">🚛 Dashboard Trasporti</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-500">Operatore: {{ current_user.username }}</span>
+                        <a href="{{ url_for('logout') }}" class="text-red-600 hover:text-red-800">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Dashboard Trasporti</h1>
+                <div class="flex space-x-4">
+                    <button id="refreshBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i>Aggiorna
+                    </button>
+                    <a href="/pianifica-tratta" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-route mr-2"></i>Pianifica Tratta
+                    </a>
+                </div>
+            </div>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-7 gap-4 mb-8">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-gray-500">Tutti Ordini</p>
+                            <p class="text-lg font-semibold text-gray-900" id="totalOrders">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-yellow-100 rounded-lg">
+                            <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-gray-500">In Preparazione</p>
+                            <p class="text-lg font-semibold text-gray-900" id="inPreparation">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-green-100 rounded-lg">
+                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-gray-500">Pronti</p>
+                            <p class="text-lg font-semibold text-gray-900" id="ready">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-purple-100 rounded-lg">
+                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-gray-500">Con Indirizzo</p>
+                            <p class="text-lg font-semibold text-gray-900" id="ordersWithAddress">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-emerald-100 rounded-lg">
+                            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3a4 4 0 118 0v4m-4 6v6m-4-6h8m-8 6h8"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-gray-500">Con Trasporto</p>
+                            <p class="text-lg font-semibold text-gray-900" id="ordersWithTransport">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-gray-500">Ordini Consegna</p>
+                            <p class="text-lg font-semibold text-gray-900" id="ordersConsegna">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fuel-cost-card rounded-lg shadow p-4">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-white bg-opacity-20 rounded-lg">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-xs font-medium text-white opacity-90">Prezzo Diesel</p>
+                            <p class="text-lg font-semibold text-white">€{{ "%.2f"|format(fuel_price) }}/l</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Orders List -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <h2 class="text-lg font-medium text-gray-900">📦 Tutti gli Ordini</h2>
+                                    <p class="text-sm text-gray-500">Ordini evidenziati in verde hanno un trasporto associato</p>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <select id="orderFilter" class="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="all">Tutti gli ordini</option>
+                                        <option value="consegna">Solo ordini consegna</option>
+                                        <option value="non-consegna">Solo ordini non consegna</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-4" id="ordersList">
+                                <!-- Orders will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar -->
+                <div class="space-y-6">
+                    <!-- Fuel Cost Update -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">⛽ Aggiorna Prezzo Carburante</h3>
+                        <form id="fuelCostForm">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Tipo Carburante</label>
+                                    <select name="tipo_carburante" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <option value="diesel">Diesel</option>
+                                        <option value="benzina">Benzina</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Prezzo al Litro (€)</label>
+                                    <input type="number" name="prezzo_litro" step="0.01" min="0" value="{{ "%.2f"|format(fuel_price) }}" 
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                                <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                    Aggiorna Prezzo
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Route Planning - Rimossa, ora disponibile tramite bottone "Pianifica Tratta" -->
+                </div>
+            </div>
+
+            <!-- Google Maps -->
+            <div class="mt-8">
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h2 class="text-lg font-medium text-gray-900">🗺️ Mappa Tratte</h2>
+                        <p class="text-sm text-gray-500">Visualizzazione delle tratte di consegna</p>
+                    </div>
+                    <div class="p-6">
+                        <div id="map" class="map-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Routes -->
+            <div class="mt-8">
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h2 class="text-lg font-medium text-gray-900">🚛 Tratte Attive</h2>
+                        <p class="text-sm text-gray-500">Tratte pianificate e in corso</p>
+                    </div>
+                    <div class="p-6">
+                        <div class="space-y-4" id="activeRoutes">
+                            {% for route in active_routes %}
+                            <div class="route-card rounded-lg p-4">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-white">{{ route.nome_tratta }}</h3>
+                                        <p class="text-white opacity-90 text-sm">{{ route.indirizzo_partenza }}</p>
+                                        <p class="text-white opacity-75 text-xs mt-1">
+                                            {{ route.distanza_totale_km|round(2) if route.distanza_totale_km else 'N/A' }} km • 
+                                            {{ route.tempo_stimato_minuti if route.tempo_stimato_minuti else 'N/A' }} min • 
+                                            €{{ route.costo_carburante_euro|round(2) if route.costo_carburante_euro else 'N/A' }}
+                                        </p>
+                                    </div>
+                                    <span class="status-badge bg-white bg-opacity-20 text-white text-xs px-2 py-1 rounded">
+                                        {{ route.stato }}
+                                    </span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <p class="text-gray-500 text-center py-4">Nessuna tratta attiva</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Address Modal -->
+    <div id="addressModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">📍 Aggiungi Indirizzo di Consegna</h3>
+                <form id="addressForm">
+                    <input type="hidden" id="addressSeriale" name="seriale">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Indirizzo</label>
+                            <input type="text" name="indirizzo" required 
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Città</label>
+                                <input type="text" name="citta" required 
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Provincia</label>
+                                <input type="text" name="provincia" required maxlength="2" 
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">CAP</label>
+                            <input type="text" name="cap" required maxlength="5" 
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Note (opzionale)</label>
+                            <textarea name="note" rows="2" 
+                                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="submit" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
+                                Salva
+                            </button>
+                            <button type="button" onclick="closeAddressModal()" class="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400">
+                                Annulla
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+
+        // Initialize Google Maps
+        function initMap() {
+            // Default to Italy center
+            const italy = { lat: 41.9028, lng: 12.4964 };
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 6,
+                center: italy,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            });
+        }
+
+        // Store all orders for filtering
+        let allOrdersData = [];
+        
+        // Load orders
+        async function loadOrders() {
+            try {
+                const response = await fetch('/api/trasporti/all-orders');
+                const data = await response.json();
+                
+                if (data.success && data.orders) {
+                    allOrdersData = data.orders; // Store all orders
+                    updateStats(data.orders);
+                    filterOrders(); // Apply current filter
+                } else {
+                    console.error('Error loading orders:', data);
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+        
+        // Filter orders based on selection
+        function filterOrders() {
+            const filterValue = document.getElementById('orderFilter').value;
+            let filteredOrders = allOrdersData;
+            
+            if (filterValue === 'consegna') {
+                filteredOrders = allOrdersData.filter(order => order.is_consegna);
+            } else if (filterValue === 'non-consegna') {
+                filteredOrders = allOrdersData.filter(order => !order.is_consegna);
+            }
+            
+            renderOrders(filteredOrders);
+        }
+
+        // Update statistics
+        function updateStats(orders) {
+            document.getElementById('totalOrders').textContent = orders.length;
+            document.getElementById('inPreparation').textContent = orders.filter(o => o.status === 'in_preparazione').length;
+            document.getElementById('ready').textContent = orders.filter(o => o.status === 'pronto').length;
+            
+            // Aggiungi statistiche per trasporti
+            const ordersWithTransport = orders.filter(o => o.has_transport).length;
+            const ordersWithAddress = orders.filter(o => o.has_delivery_address).length;
+            const ordersConsegna = orders.filter(o => o.is_consegna).length;
+            
+            // Aggiorna o crea elementi per le nuove statistiche se esistono
+            const transportStatsElement = document.getElementById('ordersWithTransport');
+            if (transportStatsElement) {
+                transportStatsElement.textContent = ordersWithTransport;
+            }
+            
+            const addressStatsElement = document.getElementById('ordersWithAddress');
+            if (addressStatsElement) {
+                addressStatsElement.textContent = ordersWithAddress;
+            }
+            
+            const consegnaStatsElement = document.getElementById('ordersConsegna');
+            if (consegnaStatsElement) {
+                consegnaStatsElement.textContent = ordersConsegna;
+            }
+        }
+
+        // Render orders list
+        function renderOrders(orders) {
+            const container = document.getElementById('ordersList');
+            container.innerHTML = '';
+
+            orders.forEach(order => {
+                const orderCard = document.createElement('div');
+                
+                // Aggiungi classe per evidenziare ordini con trasporto
+                const hasTransport = order.has_transport;
+                const baseClasses = 'order-card border rounded-lg p-4 hover:shadow-md';
+                const transportClasses = hasTransport ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200';
+                orderCard.className = `${baseClasses} ${transportClasses}`;
+                
+                const statusClass = `status-${order.status}`;
+                const hasAddress = order.has_delivery_address ? '✅' : '❌';
+                
+                // Badge per trasporto associato
+                let transportBadge = '';
+                if (hasTransport) {
+                    transportBadge = `
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-truck mr-1"></i> Trasporto #${order.transport_id}
+                        </span>
+                    `;
+                }
+                
+                // Badge per ordini di consegna
+                let consegnaBadge = '';
+                if (order.is_consegna) {
+                    consegnaBadge = `
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <i class="fas fa-shipping-fast mr-1"></i> Consegna
+                        </span>
+                    `;
+                }
+                
+                // Genera la lista degli indirizzi
+                let addressesHtml = '';
+                if (order.delivery_addresses && order.delivery_addresses.length > 0) {
+                    addressesHtml = '<div class="mt-2 space-y-1">';
+                    order.delivery_addresses.forEach((addr, index) => {
+                        addressesHtml += `
+                            <div class="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                <div class="flex-1">
+                                    <p class="text-sm text-gray-700">📍 ${addr.indirizzo_completo}</p>
+                                    ${addr.note ? `<p class="text-xs text-gray-500">${addr.note}</p>` : ''}
+                                </div>
+                                <div class="flex space-x-1">
+                                    <button onclick="editAddress(${addr.id})" class="text-blue-600 hover:text-blue-800 text-xs">✏️</button>
+                                    <button onclick="deleteAddress(${addr.id})" class="text-red-600 hover:text-red-800 text-xs">🗑️</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    addressesHtml += '</div>';
+                }
+                
+                orderCard.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <h3 class="text-lg font-semibold text-gray-900">
+                                    <a href="/ordine/${order.seriale}" class="hover:text-blue-600 hover:underline cursor-pointer">Ordine #${order.numero_ordine || order.seriale}</a>
+                                </h3>
+                                <span class="status-badge ${statusClass}">${order.status}</span>
+                                ${consegnaBadge}
+                                ${transportBadge}
+                                <span class="text-sm text-gray-500">${hasAddress} Indirizzi (${order.delivery_addresses ? order.delivery_addresses.length : 0})</span>
+                            </div>
+                            <p class="text-sm text-gray-600 mb-1">Cliente: ${order.cliente || order.nome_cliente || 'Cliente non specificato'}</p>
+                            <p class="text-sm text-gray-600 mb-1">Seriale: ${order.seriale} | Data: ${order.data_ordine}</p>
+                            <p class="text-sm text-gray-600 mb-1">Peso totale: <span class="font-semibold text-blue-600">${order.peso_totale_kg} kg</span></p>
+                            <p class="text-sm text-gray-500 mb-2">${order.status_summary}</p>
+                            ${addressesHtml}
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="openAddressModal('${order.seriale}')" class="text-blue-600 hover:text-blue-800 text-sm">+ Indirizzo</button>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(orderCard);
+            });
+        }
+
+
+
+        // Open address modal
+        function openAddressModal(seriale) {
+            document.getElementById('addressSeriale').value = seriale;
+            document.getElementById('addressModal').classList.remove('hidden');
+        }
+
+        // Close address modal
+        function closeAddressModal() {
+            document.getElementById('addressModal').classList.add('hidden');
+            document.getElementById('addressForm').reset();
+            
+            // Reset form mode
+            const form = document.getElementById('addressForm');
+            delete form.dataset.editMode;
+            delete form.dataset.addressId;
+            
+            // Reset button text
+            document.querySelector('#addressForm button[type="submit"]').textContent = 'Salva';
+        }
+
+
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            loadOrders();
+            
+            // Add filter change listener
+            document.getElementById('orderFilter').addEventListener('change', function() {
+                filterOrders();
+            });
+
+            // Fuel cost form
+            document.getElementById('fuelCostForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                
+                try {
+                    const response = await fetch('/api/trasporti/fuel-cost', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('Errore: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('Error updating fuel cost:', error);
+                    alert('Errore nell\'aggiornamento del prezzo');
+                }
+            });
+
+
+
+
+        });
+
+
+
+        // Edit address
+        async function editAddress(addressId) {
+            try {
+                const response = await fetch(`/api/trasporti/delivery-addresses/${addressId}`);
+                const addresses = await response.json();
+                const address = addresses.find(addr => addr.id === addressId);
+                
+                if (address) {
+                    // Popola il modal con i dati esistenti
+                    document.getElementById('addressSeriale').value = address.seriale;
+                    document.querySelector('input[name="indirizzo"]').value = address.indirizzo;
+                    document.querySelector('input[name="citta"]').value = address.citta;
+                    document.querySelector('input[name="provincia"]').value = address.provincia;
+                    document.querySelector('input[name="cap"]').value = address.cap;
+                    document.querySelector('textarea[name="note"]').value = address.note_indirizzo || '';
+                    
+                    // Cambia il comportamento del form per l'aggiornamento
+                    const form = document.getElementById('addressForm');
+                    form.dataset.editMode = 'true';
+                    form.dataset.addressId = addressId;
+                    
+                    // Cambia il testo del pulsante
+                    document.querySelector('#addressForm button[type="submit"]').textContent = 'Aggiorna';
+                    
+                    openAddressModal(address.seriale);
+                }
+            } catch (error) {
+                console.error('Error loading address:', error);
+                alert('Errore nel caricamento dell\'indirizzo');
+            }
+        }
+
+        // Delete address
+        async function deleteAddress(addressId) {
+            if (!confirm('Sei sicuro di voler eliminare questo indirizzo?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/trasporti/delivery-address/${addressId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Indirizzo eliminato con successo');
+                    loadOrders();
+                } else {
+                    alert('Errore: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error deleting address:', error);
+                alert('Errore nell\'eliminazione dell\'indirizzo');
+            }
+        }
+
+        // Update address form submission
+        document.getElementById('addressForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            try {
+                let response;
+                if (this.dataset.editMode === 'true') {
+                    // Aggiorna indirizzo esistente
+                    const addressId = this.dataset.addressId;
+                    const jsonData = {
+                        indirizzo: formData.get('indirizzo'),
+                        citta: formData.get('citta'),
+                        provincia: formData.get('provincia'),
+                        cap: formData.get('cap'),
+                        note: formData.get('note')
+                    };
+                    
+                    response = await fetch(`/api/trasporti/delivery-address/${addressId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(jsonData)
+                    });
+                } else {
+                    // Aggiungi nuovo indirizzo
+                    response = await fetch('/api/trasporti/delivery-address', {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert(data.message);
+                    closeAddressModal();
+                    loadOrders();
+                } else {
+                    alert('Errore: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error saving address:', error);
+                alert('Errore nel salvataggio dell\'indirizzo');
+            }
+        });
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadOrders, 30000);
+    </script>
+</body>
+</html>

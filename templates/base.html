@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}App Ordini{% endblock %}</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Flowbite CSS + JS via CDN -->
+  <link 
+    href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.css" 
+    rel="stylesheet">
+  <script 
+    src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.js">
+  </script>
+  
+  <!-- Custom styles -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .card-hover { transition: all 0.3s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+  </style>
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+  <!-- Modern Navbar -->
+  <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="{{ url_for('home') }}" class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                GIORZA
+              </span>
+              <span class="text-xs text-gray-500 font-medium">Innovazione e digitalizzazione</span>
+            </div>
+          </a>
+        </div>
+        
+        <div class="flex items-center space-x-4">
+          {% if current_user.is_authenticated %}
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                <span class="text-white text-sm font-medium">{{ current_user.username[0].upper() }}</span>
+              </div>
+              <div class="hidden md:block">
+                <p class="text-sm font-medium text-gray-900">{{ current_user.username }}</p>
+                <p class="text-xs text-gray-500">{{ current_user.role|title }}</p>
+                {% if current_user.reparto %}
+                <p class="text-xs text-blue-600 font-medium">
+                  {{ current_user.reparto|replace('REP', 'Reparto ') }}
+                </p>
+                {% endif %}
+              </div>
+              <a href="{{ url_for('logout') }}"
+                 class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                Logout
+              </a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Back Button (if not on home page) -->
+  {% if request.endpoint != 'home' and request.endpoint != 'root' %}
+  <div class="bg-white border-b border-gray-100 py-3">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <button onclick="goBack()" 
+              class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 shadow-sm">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Indietro
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-gray-200 mt-auto">
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div class="text-center">
+        <div class="flex flex-col items-center space-y-2">
+          <div class="flex items-center space-x-2">
+            <div class="w-6 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+            <span class="text-sm font-semibold text-gray-700">DIGITALMENTEONLINE</span>
+          </div>
+          <p class="text-xs text-gray-500">di Mario Giordano</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+  // Target esplicito per il tasto Indietro, impostato in base alla pagina corrente
+  {% set back_target = None %}
+  {% if request.endpoint == 'order_detail' %}
+    {% if request.args.get('back') == 'preparazione' %}
+      {% set back_target = url_for('ordini_preparazione') %}
+    {% elif request.args.get('back') == 'preparati' %}
+      {% set back_target = url_for('ordini_preparati') %}
+    {% else %}
+      {% set back_target = url_for('index') %}
+    {% endif %}
+  {% elif request.endpoint == 'ordini_preparazione' or request.endpoint == 'ordini_preparati' or request.endpoint == 'index' %}
+    {% set back_target = url_for('home') %}
+  {% endif %}
+  const BACK_TARGET = "{{ back_target or '' }}";
+
+  function goBack() {
+    if (BACK_TARGET) {
+      window.location.href = BACK_TARGET;
+      return;
+    }
+    // Fallback: usa la cronologia, altrimenti vai alla dashboard
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = "{{ url_for('home') }}";
+    }
+  }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

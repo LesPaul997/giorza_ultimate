@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stampa Ordine {{ numero }}</title>
+    <style>
+        @media print {
+            body {
+                margin: 0;
+                padding: 20px;
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .print-header {
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #333;
+                padding-bottom: 20px;
+            }
+            
+            .print-title {
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+            
+            .order-info {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            
+            .info-group {
+                border: 1px solid #ccc;
+                padding: 15px;
+                border-radius: 5px;
+            }
+            
+            .info-label {
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 5px;
+            }
+            
+            .info-value {
+                color: #666;
+            }
+            
+            .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+            }
+            
+            .items-table th {
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: left;
+                font-weight: bold;
+            }
+            
+            .items-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                vertical-align: top;
+            }
+            
+            .items-table tr:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+            
+            .quantity {
+                text-align: right;
+            }
+            
+            .price {
+                text-align: right;
+            }
+            
+            .total {
+                text-align: right;
+                font-weight: bold;
+            }
+            
+            .footer {
+                margin-top: 40px;
+                text-align: center;
+                font-size: 10px;
+                color: #666;
+                border-top: 1px solid #ccc;
+                padding-top: 20px;
+            }
+        }
+        
+        /* Stili per schermo (non stampa) */
+        @media screen {
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #f5f5f5;
+            }
+            
+            .print-container {
+                background: white;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 30px;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                border-radius: 8px;
+            }
+            
+            .print-header {
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #333;
+                padding-bottom: 20px;
+            }
+            
+            .print-title {
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 10px;
+                color: #333;
+            }
+            
+            .order-info {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            
+            .info-group {
+                border: 1px solid #ccc;
+                padding: 15px;
+                border-radius: 5px;
+                background-color: #f9f9f9;
+            }
+            
+            .info-label {
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 5px;
+            }
+            
+            .info-value {
+                color: #666;
+            }
+            
+            .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+            }
+            
+            .items-table th {
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: left;
+                font-weight: bold;
+            }
+            
+            .items-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                vertical-align: top;
+            }
+            
+            .items-table tr:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+            
+            .quantity {
+                text-align: right;
+            }
+            
+            .price {
+                text-align: right;
+            }
+            
+            .total {
+                text-align: right;
+                font-weight: bold;
+            }
+            
+            .footer {
+                margin-top: 40px;
+                text-align: center;
+                font-size: 10px;
+                color: #666;
+                border-top: 1px solid #ccc;
+                padding-top: 20px;
+            }
+            
+            .print-buttons {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            
+            .print-btn {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                margin: 0 10px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+            }
+            
+            .print-btn:hover {
+                background-color: #0056b3;
+            }
+            
+            .back-btn {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                margin: 0 10px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                text-decoration: none;
+                display: inline-block;
+            }
+            
+            .back-btn:hover {
+                background-color: #545b62;
+            }
+            
+            /* Riga non disponibile (grigia) */
+            .row-unavailable td {
+                color: #9ca3af;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-container">
+        <!-- Pulsanti per schermo -->
+        <div class="print-buttons no-print">
+                                    <button class="print-btn" onclick="window.print()">🖨️ Stampa</button>
+                        <a href="/ordine/{{ seriale }}" class="back-btn">← Torna all'ordine</a>
+        </div>
+        
+        <!-- Header -->
+        <div class="print-header">
+            <div class="print-title">ORDINE CLIENTE N° {{ numero }}</div>
+            <div>Seriale: {{ seriale }}</div>
+        </div>
+        
+        <!-- Informazioni ordine -->
+        <div class="order-info">
+            <div class="info-group">
+                <div class="info-label">Cliente:</div>
+                <div class="info-value">{{ customer }}</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">Data Ordine:</div>
+                <div class="info-value">{{ date }}</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">Data Arrivo:</div>
+                <div class="info-value">{{ data_arrivo }}</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">Ritiro:</div>
+                <div class="info-value">{{ ritiro }}</div>
+            </div>
+        </div>
+        
+        <!-- Tabella articoli -->
+        <table class="items-table">
+                                    <thead>
+                            <tr>
+                                <th>Codice</th>
+                                <th>Descrizione</th>
+                                <th>Quantità</th>
+                                <th>U.M.</th>
+                            </tr>
+                        </thead>
+            <tbody>
+                {% for line in lines %}
+                                            <tr class="{% if line.unavailable %}row-unavailable{% endif %}">
+                                <td>{{ line.codice_articolo }}</td>
+                                <td>
+                                    {{ line.descrizione_articolo }}
+                                    {% if line.descrizione_supplementare %}
+                                        <br><small style="color: red;">{{ line.descrizione_supplementare }}</small>
+                                    {% endif %}
+                                    {% if line.unavailable and line.substitution_text %}
+                                        <br><small style="color:#6b7280;">→ {{ line.substitution_text }}</small>
+                                    {% endif %}
+                                    {% if line.data_evasione %}
+                                        <br><small style="color: blue;">Data di evasione: {{ line.data_evasione }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="quantity">{{ "%.2f"|format(line.quantita) }}</td>
+                                <td>
+                                    {{ line.unita_misura }}
+                                    {% if line.unita_misura_2 and line.quantita_um2 %}
+                                        <br><small>= {{ "%.3f"|format(line.quantita_um2) }} {{ line.unita_misura_2 }}</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>Documento generato il {{ datetime.now().strftime('%d/%m/%Y %H:%M') }}</p>
+            <p>Sistema Gestione Ordini - ZARRELLA</p>
+        </div>
+    </div>
+</body>
+</html> 

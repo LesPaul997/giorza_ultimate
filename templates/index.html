@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block title %}Elenco Ordini{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">📋 Elenco Ordini</h1>
+        <p class="text-gray-600">Gestisci tutti gli ordini clienti</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="mb-6">
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+            <input type="text" id="searchInput" placeholder="Cerca ordini, clienti, articoli..."
+                   class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        
+        <!-- Test Notification Button -->
+        <div class="mt-4 flex justify-end">
+            <button id="testNotificationBtn" 
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                🔔 Test Notifica
+            </button>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Ordini Clienti</h2>
+            <p class="text-sm text-gray-500 mt-1">Ultimo aggiornamento: <span id="lastUpdate">-</span></p>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Numero Ordine
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Data
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Cliente
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                            Azioni
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-200">
+                    <!-- Orders will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-12 hidden">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Nessun ordine trovato</h3>
+            <p class="mt-1 text-sm text-gray-500">Non ci sono ordini che corrispondono ai criteri di ricerca.</p>
+        </div>
+        
+        <!-- Loading State -->
+        <div id="loadingState" class="text-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p class="mt-2 text-sm text-gray-500">Caricamento ordini...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Audio element for notification sound -->
+<audio id="notificationSound" preload="auto">
+  <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" type="audio/wav">
+</audio>
+
+<!-- Alternative notification sound (stronger beep) -->
+<audio id="strongNotificationSound" preload="auto">
+  <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" type="audio/wav">
+</audio>
+
+<!-- Visual notification overlay -->
+<div id="notificationOverlay" class="fixed inset-0 pointer-events-none z-50 hidden">
+  <div class="absolute inset-0 border-8 border-red-500 animate-pulse"></div>
+</div>
+
+<style>
+@keyframes flash-border {
+  0%, 100% { border-color: transparent; }
+  50% { border-color: #ef4444; }
+}
+
+.flash-border {
+  animation: flash-border 0.5s ease-in-out infinite;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.shake {
+  animation: shake 0.3s ease-in-out infinite;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ordersTableBody = document.getElementById('ordersTableBody');
+    const searchInput = document.getElementById('searchInput');
+    const emptyState = document.getElementById('emptyState');
+    const loadingState = document.getElementById('loadingState');
+    const lastUpdate = document.getElementById('lastUpdate');
+    const notificationSound = document.getElementById('notificationSound');
+    const strongNotificationSound = document.getElementById('strongNotificationSound');
+    const notificationOverlay = document.getElementById('notificationOverlay');
+    
+    let currentOrders = [];
+    let lastOrderCount = 0;
+    let lastOrderSeriali = new Set(); // Per tenere traccia dei seriali degli ordini precedenti
+    let isFirstLoad = true; // Flag per il primo caricamento
+    let isPolling = true;
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('it-IT', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+    }
+
+    function getStatusBadge(status) {
+        if (!status || status === 'nuovo') return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Nuovo</span>';
+        
+        switch(status) {
+            case 'letto':
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Ordine Letto</span>';
+            // rimosso badge per materiale non disponibile: la segnalazione è gestita dentro il dettaglio ordine sulle righe
+            case 'in_preparazione':
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Ordine in preparazione</span>';
+            case 'pronto':
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Ordine pronto</span>';
+            default:
+                return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Nuovo</span>';
+        }
+    }
+
+    function displayOrders(orders) {
+        if (orders.length === 0) {
+            ordersTableBody.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            loadingState.classList.add('hidden');
+            return;
+        }
+
+        emptyState.classList.add('hidden');
+        loadingState.classList.add('hidden');
+        
+        ordersTableBody.innerHTML = orders.map(order => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    ${order.numero_ordine}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${formatDate(order.data_ordine)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${order.nome_cliente || 'Cliente non disponibile'}
+                    ${order.ritiro && order.ritiro.trim() ? `
+                        <div class="mt-1">
+                            <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                                ${order.ritiro.toLowerCase().includes('ritiro') ? '📦' : 
+                                  order.ritiro.toLowerCase().includes('consegna') ? '🚚' : '📋'} ${order.ritiro}
+                            </span>
+                        </div>
+                    ` : ''}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${getStatusBadge(order.status)}
+                    ${order.status_operatore ? `<br><span class="text-xs text-gray-400">da ${order.status_operatore}</span>` : ''}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <a href="/ordine/${order.seriale}" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Visualizza
+                    </a>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function filterOrders(orders, searchTerm) {
+        if (!searchTerm) return orders;
+        
+        const term = searchTerm.toLowerCase();
+        return orders.filter(order => 
+            order.numero_ordine.toLowerCase().includes(term) ||
+            (order.nome_cliente && order.nome_cliente.toLowerCase().includes(term)) ||
+            order.seriale.toLowerCase().includes(term) ||
+            (order.codice_articolo && order.codice_articolo.toLowerCase().includes(term)) ||
+            (order.descrizione_articolo && order.descrizione_articolo.toLowerCase().includes(term)) ||
+            (order.descrizione_supplementare && order.descrizione_supplementare.toLowerCase().includes(term)) ||
+            (order.ritiro && order.ritiro.toLowerCase().includes(term))
+        );
+    }
+
+    async function playNotificationSound() {
+        try {
+            // Create a more noticeable sound using Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Create multiple oscillators for a more complex sound
+            const frequencies = [800, 1000, 1200]; // Multiple frequencies
+            const oscillators = [];
+            const gainNodes = [];
+            
+            frequencies.forEach((freq, index) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                
+                // Create a pattern of beeps
+                const startTime = audioContext.currentTime + (index * 0.1);
+                oscillator.start(startTime);
+                oscillator.stop(startTime + 0.3);
+                
+                oscillators.push(oscillator);
+                gainNodes.push(gainNode);
+            });
+            
+            // Also try to play the audio files as backup
+            try {
+                notificationSound.currentTime = 0;
+                await notificationSound.play();
+            } catch (audioError) {
+                console.log('Audio file playback failed:', audioError);
+            }
+            
+        } catch (error) {
+            console.log('Web Audio API failed:', error);
+            // Fallback to simple beep
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.8, audioContext.currentTime);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (fallbackError) {
+                console.log('Fallback audio also failed:', fallbackError);
+            }
+        }
+    }
+
+    function showVisualNotification() {
+        // Show the red border overlay
+        notificationOverlay.classList.remove('hidden');
+        
+        // Add shake effect to the page
+        document.body.classList.add('shake');
+        
+        // Hide after 5 seconds
+        setTimeout(() => {
+            notificationOverlay.classList.add('hidden');
+            document.body.classList.remove('shake');
+        }, 5000);
+    }
+
+    async function loadOrders() {
+        try {
+            const response = await fetch('/api/orders');
+            const orders = await response.json();
+            
+            currentOrders = orders;
+            const filteredOrders = filterOrders(orders, searchInput.value);
+            displayOrders(filteredOrders);
+            
+            // Update last update time
+            lastUpdate.textContent = new Date().toLocaleTimeString('it-IT');
+            
+            // Check for new orders and play sound
+            const currentOrderSeriali = new Set(orders.map(order => order.seriale));
+            
+            // Trova gli ordini effettivamente nuovi (seriali non presenti prima)
+            const newOrderSeriali = new Set();
+            for (const seriale of currentOrderSeriali) {
+                if (!lastOrderSeriali.has(seriale)) {
+                    newOrderSeriali.add(seriale);
+                }
+            }
+            
+            // Trova gli ordini nuovi E non letti (status "nuovo" o undefined)
+            const newUnreadOrders = orders.filter(order => 
+                newOrderSeriali.has(order.seriale) && 
+                (!order.status || order.status === 'nuovo')
+            );
+            
+            // Se ci sono ordini nuovi E non letti, attiva la notifica
+            // IMPORTANTE: Solo se non è il primo caricamento e se ci sono effettivamente nuovi ordini non letti
+            if (newUnreadOrders.length > 0 && !isFirstLoad) {
+                console.log(`🎉 Nuovi ordini non letti arrivati: ${newUnreadOrders.length}`);
+                console.log('Nuovi seriali non letti:', newUnreadOrders.map(o => o.seriale));
+                
+                // Play notification sound
+                await playNotificationSound();
+                
+                // Show visual notification
+                showVisualNotification();
+                
+                // Show browser notification if supported
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('Nuovi Ordini', {
+                        body: `${newUnreadOrders.length} nuovo ordine/i non letto/i arrivato/i!`,
+                        icon: '/favicon.ico',
+                        requireInteraction: true, // Keep notification until user interacts
+                        tag: 'new-orders' // Group notifications
+                    });
+                }
+                
+                // Flash the page title to draw attention
+                const originalTitle = document.title;
+                let flashCount = 0;
+                const flashInterval = setInterval(() => {
+                    document.title = flashCount % 2 === 0 ? '🚨 NUOVI ORDINI!' : originalTitle;
+                    flashCount++;
+                    if (flashCount >= 10) { // Increased to 10 flashes
+                        clearInterval(flashInterval);
+                        document.title = originalTitle;
+                    }
+                }, 500);
+            } else if (!isFirstLoad) {
+                // Log quando non ci sono nuovi ordini non letti (per debug)
+                console.log('✅ Nessun nuovo ordine non letto - Notifica non attivata');
+            }
+            
+            // Aggiorna sempre i contatori
+            lastOrderCount = orders.length;
+            lastOrderSeriali = currentOrderSeriali;
+            
+            // Dopo il primo caricamento, imposta il flag a false
+            if (isFirstLoad) {
+                isFirstLoad = false;
+                console.log('🚀 Primo caricamento completato - Notifiche attive');
+            }
+            
+        } catch (error) {
+            console.error('Error loading orders:', error);
+            loadingState.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+        }
+    }
+
+    // Search functionality
+    searchInput.addEventListener('input', function() {
+        const filteredOrders = filterOrders(currentOrders, this.value);
+        displayOrders(filteredOrders);
+    });
+
+    // Test notification button
+    document.getElementById('testNotificationBtn').addEventListener('click', async function() {
+        console.log('🧪 Testing notification system...');
+        await playNotificationSound();
+        showVisualNotification();
+        
+        // Flash the page title
+        const originalTitle = document.title;
+        let flashCount = 0;
+        const flashInterval = setInterval(() => {
+            document.title = flashCount % 2 === 0 ? '🧪 TEST NOTIFICA!' : originalTitle;
+            flashCount++;
+            if (flashCount >= 6) {
+                clearInterval(flashInterval);
+                document.title = originalTitle;
+            }
+        }, 500);
+    });
+
+    // Request notification permission on page load
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+
+    // Initial load
+    loadOrders();
+
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+        if (isPolling) {
+            loadOrders();
+        }
+    }, 30000);
+
+    // Controllo modifiche ordini esistenti ogni 30 secondi
+    async function checkOrderModifications() {
+        try {
+            const response = await fetch('/api/refresh');
+            const data = await response.json();
+            
+            if (data.has_changes) {
+                console.log('🔄 Modifiche agli ordini rilevate - Ricarico lista...');
+                // Ricarica la lista ordini
+                loadOrders();
+                
+                // Mostra notifica
+                showModificationNotification(data.modified_orders.length);
+            }
+        } catch (error) {
+            console.error('Errore nel controllo modifiche ordini:', error);
+        }
+    }
+
+    function showModificationNotification(count) {
+        // Crea notifica visiva
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-orange-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2';
+        notification.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+            <span>${count} ordine/i modificato/i - Lista aggiornata</span>
+        `;
+        document.body.appendChild(notification);
+        
+        // Rimuovi notifica dopo 3 secondi
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
+    }
+
+    // Avvia il controllo modifiche
+    setInterval(() => {
+        if (isPolling) {
+            checkOrderModifications();
+        }
+    }, 30000);
+
+    // Pause polling when page is not visible
+    document.addEventListener('visibilitychange', function() {
+        isPolling = !document.hidden;
+    });
+});
+</script>
+{% endblock %}

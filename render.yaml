@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: gz-connect
+    env: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        value: cambiamisubito
+      - key: ACTIVE_CONN
+        value: demo          # o cliente
+      - key: MSSQL_CONNSTRING_DEMO
+        value: |
+          DRIVER={ODBC Driver 18 for SQL Server};
+          SERVER=host.docker.internal,1433;
+          DATABASE=ahrsqldemo;
+          UID=sa;
+          PWD=********;
+          Encrypt=no;

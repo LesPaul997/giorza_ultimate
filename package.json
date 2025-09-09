@@ -1,0 +1,19 @@
+{
+  "name": "estazione_ordini",
+  "version": "1.0.0",
+  "main": "index.js",
+   "scripts": {
+    "init:tailwind": "npx tailwindcss@latest init -p",
+    "build:css":     "npx tailwindcss@latest -i ./static/css/tailwind.css -o ./static/dist/output.css --minify"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "flowbite": "^3.1.2",
+    "postcss": "^8.5.5",
+    "tailwindcss": "^4.1.10"
+  }
+}

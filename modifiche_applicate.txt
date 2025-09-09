@@ -1,0 +1,312 @@
+MODIFICHE NECESSARIE PER FAR FUNZIONARE L'APP CON L'API
+=======================================================
+
+1. AGGIUNGI IMPORT REQUESTS IN app.py
+-------------------------------------
+Dopo la riga "from datetime import datetime" aggiungi:
+import requests
+
+2. AGGIUNGI REQUESTS AL requirements.txt
+----------------------------------------
+Aggiungi questa riga al file requirements.txt:
+requests==2.31.0
+
+3. SOSTITUISCI LA FUNZIONE refresh_orders_incremental
+-----------------------------------------------------
+Sostituisci completamente la funzione refresh_orders_incremental() con questa versione:
+
+def refresh_orders_incremental() -> None:
+    """Aggiorna la cache degli ordini con rilevamento di modifiche agli ordini esistenti."""
+    print("🔄 Inizio refresh_orders_incremental")
+    
+    # Chiama l'API per ottenere i dati aggiornati
+    try:
+        print("📡 Chiamata API ordini...")
+        response = requests.get("https://4fb06daaa4bc.ngrok-free.app/api/orders", timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        print(f"📊 Risposta API: success={data.get('success')}, ordini={len(data.get('data', []))}")
+        
+        if not data.get("success"):
+            print(f"❌ Errore API ordini: {data.get('error', 'Unknown error')}")
+            return
+            
+        new_orders = data["data"]
+        print(f"✅ Ricevuti {len(new_orders)} ordini dall'API")
+    except Exception as e:
+        print(f"❌ Errore connessione API ordini: {e}")
+        return
+    
+    # Aggiungi data di arrivo e aggiorna il codice_reparto
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    
+    # Aggiorna il codice_reparto per ogni ordine usando i dati del database
+    from models import ArticoloReparto
+    
+    # Assicurati di essere nel contesto dell'applicazione
+    with app.app_context():
+        for order in new_orders:
+            # Aggiungi data di arrivo
+            order["data_arrivo"] = current_date
+            
+            codice_articolo = order.get("codice_articolo", "").strip()
+            if codice_articolo:
+                try:
+                    articolo = ArticoloReparto.query.filter_by(codice_articolo=codice_articolo).first()
+                    if articolo:
+                        if articolo.tipo_collo_1:
+                            order["codice_reparto"] = articolo.tipo_collo_1
+                        else:
+                            order["codice_reparto"] = 'REP05'  # Default
+                        
+                        # Aggiungi la seconda unità di misura se disponibile
+                        if articolo.unita_misura_2:
+                            order["unita_misura_2"] = articolo.unita_misura_2
+                            
+                            # Calcola la quantità convertita se abbiamo operatore e fattore
+                            if (articolo.operatore_conversione and 
+                                articolo.fattore_conversione and 
+                                order.get("quantita")):
+                                try:
+                                    if articolo.operatore_conversione == "/":
+                                        quantita_convertita = order["quantita"] / articolo.fattore_conversione
+                                    elif articolo.operatore_conversione == "*":
+                                        quantita_convertita = order["quantita"] * articolo.fattore_conversione
+                                    else:
+                                        quantita_convertita = None
+                                    
+                                    if quantita_convertita is not None:
+                                        order["quantita_um2"] = round(quantita_convertita, 3)
+                                        order["operatore_conversione"] = articolo.operatore_conversione
+                                        order["fattore_conversione"] = articolo.fattore_conversione
+                                    else:
+                                        order["quantita_um2"] = None
+                                        order["operatore_conversione"] = None
+                                        order["fattore_conversione"] = None
+                                except (TypeError, ZeroDivisionError):
+                                    order["quantita_um2"] = None
+                                    order["operatore_conversione"] = None
+                                    order["fattore_conversione"] = None
+                            else:
+                                order["quantita_um2"] = None
+                                order["operatore_conversione"] = None
+                                order["fattore_conversione"] = None
+                        else:
+                            order["unita_misura_2"] = None
+                            order["quantita_um2"] = None
+                            order["operatore_conversione"] = None
+                            order["fattore_conversione"] = None
+                    else:
+                        order["codice_reparto"] = 'REP05'  # Default
+                        order["unita_misura_2"] = None
+                        order["quantita_um2"] = None
+                        order["operatore_conversione"] = None
+                        order["fattore_conversione"] = None
+                except Exception as e:
+                    order["codice_reparto"] = 'REP05'  # Default
+                    order["unita_misura_2"] = None
+                    order["quantita_um2"] = None
+                    order["operatore_conversione"] = None
+                    order["fattore_conversione"] = None
+    
+    # Ottieni gli ordini attualmente in cache
+    current_orders = app.config.get("ORDERS_CACHE", [])
+    
+    # Se la cache è vuota, carica tutto
+    if not current_orders:
+        print("🔄 Cache vuota - Caricamento completo ordini dall'API")
+        app.config["ORDERS_CACHE"] = new_orders
+        return
+    
+    # Conta gli ordini attuali e quelli nuovi
+    current_count = len(current_orders)
+    new_count = len(new_orders)
+    
+    print(f"📊 Ordini attuali: {current_count}, Ordini dall'API: {new_count}")
+    
+    # Crea un dizionario per accesso rapido agli ordini attuali per seriale
+    current_orders_by_serial = {}
+    for order in current_orders:
+        seriale = order.get("seriale", "")
+        if seriale not in current_orders_by_serial:
+            current_orders_by_serial[seriale] = []
+        current_orders_by_serial[seriale].append(order)
+    
+    # Crea un dizionario per accesso rapido ai nuovi ordini per seriale
+    new_orders_by_serial = {}
+    for order in new_orders:
+        seriale = order.get("seriale", "")
+        if seriale not in new_orders_by_serial:
+            new_orders_by_serial[seriale] = []
+        new_orders_by_serial[seriale].append(order)
+    
+    # Confronta ordini esistenti per trovare modifiche
+    orders_modified = False
+    modified_orders = set()  # Set per tracciare gli ordini modificati
+    
+    for seriale in new_orders_by_serial.keys():
+        if seriale in current_orders_by_serial:
+            current_righe = current_orders_by_serial[seriale]
+            new_righe = new_orders_by_serial[seriale]
+            
+            # Confronta il numero di righe per questo seriale
+            current_lines = len(current_righe)
+            new_lines = len(new_righe)
+            
+            # Crea identificatori unici per le righe attuali
+            current_identifiers = set()
+            for riga in current_righe:
+                identifier = f"{riga.get('codice_articolo', '')}_{riga.get('quantita', 0)}_{riga.get('unita_misura', '')}"
+                current_identifiers.add(identifier)
+            
+            # Crea identificatori unici per le righe nuove
+            new_identifiers = set()
+            for riga in new_righe:
+                identifier = f"{riga.get('codice_articolo', '')}_{riga.get('quantita', 0)}_{riga.get('unita_misura', '')}"
+                new_identifiers.add(identifier)
+            
+            # Controlla se ci sono differenze nel contenuto
+            if current_identifiers != new_identifiers:
+                print(f"🔄 Ordine {seriale} modificato: contenuto righe cambiato")
+                print(f"   Righe attuali: {len(current_identifiers)}")
+                print(f"   Righe nuove: {len(new_identifiers)}")
+                print(f"   Righe rimosse: {len(current_identifiers - new_identifiers)}")
+                print(f"   Righe aggiunte: {len(new_identifiers - current_identifiers)}")
+                orders_modified = True
+                modified_orders.add(seriale)
+            elif current_lines != new_lines:
+                print(f"🔄 Ordine {seriale} modificato: {current_lines} -> {new_lines} righe")
+                orders_modified = True
+                modified_orders.add(seriale)
+    
+    # Se ci sono modifiche agli ordini esistenti o ordini completamente nuovi, aggiorna tutto
+    if orders_modified or new_count != current_count:
+        print("🔄 Rilevate modifiche - Aggiornamento completo cache ordini dall'API")
+        
+        # Salva le righe modificate/cancellate per la visualizzazione
+        if orders_modified:
+            # Assicurati di essere nel contesto dell'applicazione per il database
+            with app.app_context():
+                # Crea un dizionario delle righe modificate per seriale
+                modified_lines = {}
+                for seriale in modified_orders:
+                    if seriale in current_orders_by_serial:
+                        # Trova le righe che non sono più presenti nei nuovi ordini
+                        current_righe = current_orders_by_serial[seriale]
+                        new_righe = new_orders_by_serial.get(seriale, [])
+                        
+                        # Crea identificatori unici per le righe attuali e nuove
+                        current_identifiers = set()
+                        for riga in current_righe:
+                            identifier = f"{riga.get('codice_articolo', '')}_{riga.get('quantita', 0)}_{riga.get('unita_misura', '')}"
+                            current_identifiers.add(identifier)
+                        
+                        new_identifiers = set()
+                        for riga in new_righe:
+                            identifier = f"{riga.get('codice_articolo', '')}_{riga.get('quantita', 0)}_{riga.get('unita_misura', '')}"
+                            new_identifiers.add(identifier)
+                        
+                        # Trova le righe che non sono più presenti (differenza tra set)
+                        removed_identifiers = current_identifiers - new_identifiers
+                        removed_lines = []
+                        for riga in current_righe:
+                            identifier = f"{riga.get('codice_articolo', '')}_{riga.get('quantita', 0)}_{riga.get('unita_misura', '')}"
+                            if identifier in removed_identifiers:
+                                # Marca la riga come rimossa
+                                riga["removed"] = True
+                                removed_lines.append(riga)
+                                
+                                # Salva la riga modificata nel database
+                                try:
+                                    # Verifica se la riga è già stata salvata
+                                    existing = ModifiedOrderLine.query.filter_by(
+                                        seriale=seriale,
+                                        codice_articolo=riga.get('codice_articolo', ''),
+                                        quantita=riga.get('quantita', 0),
+                                        unita_misura=riga.get('unita_misura', '')
+                                    ).first()
+                                    
+                                    if not existing:
+                                        modified_line = ModifiedOrderLine(
+                                            seriale=seriale,
+                                            codice_articolo=riga.get('codice_articolo', ''),
+                                            descrizione_articolo=riga.get('descrizione_articolo', ''),
+                                            descrizione_supplementare=riga.get('descrizione_supplementare', ''),
+                                            quantita=riga.get('quantita', 0),
+                                            unita_misura=riga.get('unita_misura', ''),
+                                            unita_misura_2=riga.get('unita_misura_2'),
+                                            quantita_um2=riga.get('quantita_um2'),
+                                            operatore_conversione=riga.get('operatore_conversione'),
+                                            fattore_conversione=riga.get('fattore_conversione'),
+                                            prezzo_unitario=riga.get('prezzo_unitario'),
+                                            codice_reparto=riga.get('codice_reparto'),
+                                            data_ordine=riga.get('data_ordine'),
+                                            numero_ordine=riga.get('numero_ordine'),
+                                            nome_cliente=riga.get('nome_cliente'),
+                                            ritiro=riga.get('ritiro'),
+                                            data_arrivo=riga.get('data_arrivo'),
+                                            removed=True
+                                        )
+                                        db.session.add(modified_line)
+                                        print(f"💾 Salvata riga modificata: {seriale} - {riga.get('codice_articolo', '')}")
+                                except Exception as e:
+                                    print(f"❌ Errore nel salvare riga modificata: {e}")
+                        
+                        if removed_lines:
+                            modified_lines[seriale] = removed_lines
+                
+                # Commit delle modifiche al database
+                try:
+                    db.session.commit()
+                    print(f"✅ Salvate {len([line for lines in modified_lines.values() for line in lines])} righe modificate nel database")
+                except Exception as e:
+                    print(f"❌ Errore nel commit delle righe modificate: {e}")
+                    db.session.rollback()
+            
+            # Salva le righe modificate nella cache
+            app.config["MODIFIED_LINES"] = modified_lines
+            
+            # Salva anche gli ordini modificati (anche se non hanno righe rimosse)
+            if modified_orders:
+                # Crea un dizionario per gli ordini modificati senza righe rimosse
+                modified_orders_cache = {}
+                for seriale in modified_orders:
+                    if seriale not in modified_lines:
+                        # Se l'ordine è stato modificato ma non ha righe rimosse, salvalo comunque
+                        modified_orders_cache[seriale] = []
+                
+                # Unisci con le righe modificate esistenti
+                app.config["MODIFIED_LINES"].update(modified_orders_cache)
+        
+        app.config["ORDERS_CACHE"] = new_orders
+    else:
+        print("✅ Nessuna modifica rilevata")
+
+4. VERIFICA CHE L'API FUNZIONI
+------------------------------
+Prima di applicare le modifiche, testa l'API manualmente:
+curl https://4fb06daaa4bc.ngrok-free.app/api/orders
+
+Dovrebbe restituire un JSON con success: true e data: [array di ordini]
+
+5. SEQUENZA DI APPLICAZIONE
+---------------------------
+1. Aggiungi l'import requests
+2. Aggiungi requests al requirements.txt
+3. Sostituisci la funzione refresh_orders_incremental
+4. Riavvia l'app
+5. Controlla i log per vedere se l'API viene chiamata
+
+6. DEBUGGING
+------------
+Se non funziona, controlla:
+- I log della console per vedere se l'API viene chiamata
+- Se l'URL dell'API è ancora valido (ngrok potrebbe essere scaduto)
+- Se requests è installato correttamente
+- Se ci sono errori di connessione
+
+7. FALLBACK
+-----------
+Se l'API non funziona, puoi sempre tornare alla versione CSV modificando la funzione
+per usare di nuovo _run_script e _load_csv invece di requests.get.

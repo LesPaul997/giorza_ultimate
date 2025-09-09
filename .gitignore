@@ -1,0 +1,10 @@
+# mai committare file di segreti
+.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads directory
+uploads/
