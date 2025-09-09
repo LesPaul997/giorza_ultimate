@@ -1,6 +1,11 @@
 # mai committare file di segreti
 .env
 
+# ignora i file .txt generici, ma non requirements.txt o modifiche_applicate.txt
+*.txt
+!requirements.txt
+!modifiche_applicate.txt
+
 # Database
 *.db
 *.sqlite
@@ -8,3 +13,16 @@
 
 # Uploads directory
 uploads/
+ 
+# Ambiente e build locali
+node_modules/
+instance/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+venv/
+.venv/
+node_modules/
