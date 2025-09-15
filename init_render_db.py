@@ -22,28 +22,30 @@ def init_database():
         print("✅ Tabelle create")
         
         # Crea utenti di default
-        users = [
-            User(username='admin', password='admin123', role='admin', reparto='admin'),
-            User(username='picker_rep01', password='picker123', role='picker', reparto='rep01'),
-            User(username='picker_rep02', password='picker123', role='picker', reparto='rep02'),
-            User(username='picker_rep03', password='picker123', role='picker', reparto='rep03'),
-            User(username='picker_rep04', password='picker123', role='picker', reparto='rep04'),
-            User(username='picker_rep05', password='picker123', role='picker', reparto='rep05'),
-            User(username='picker_rep06', password='picker123', role='picker', reparto='rep06'),
-            User(username='picker_rep07', password='picker123', role='picker', reparto='rep07'),
-            User(username='picker_rep08', password='picker123', role='picker', reparto='rep08'),
-            User(username='picker_rep09', password='picker123', role='picker', reparto='rep09'),
-            User(username='picker_rep10', password='picker123', role='picker', reparto='rep10'),
-            User(username='trasporti', password='trasporti123', role='trasporti', reparto='trasporti'),
+        users_data = [
+            ('admin', 'admin123', 'admin', 'admin'),
+            ('picker_rep01', 'picker123', 'picker', 'rep01'),
+            ('picker_rep02', 'picker123', 'picker', 'rep02'),
+            ('picker_rep03', 'picker123', 'picker', 'rep03'),
+            ('picker_rep04', 'picker123', 'picker', 'rep04'),
+            ('picker_rep05', 'picker123', 'picker', 'rep05'),
+            ('picker_rep06', 'picker123', 'picker', 'rep06'),
+            ('picker_rep07', 'picker123', 'picker', 'rep07'),
+            ('picker_rep08', 'picker123', 'picker', 'rep08'),
+            ('picker_rep09', 'picker123', 'picker', 'rep09'),
+            ('picker_rep10', 'picker123', 'picker', 'rep10'),
+            ('trasporti', 'trasporti123', 'trasporti', 'trasporti'),
         ]
         
-        for user in users:
-            existing = User.query.filter_by(username=user.username).first()
+        for username, password, role, reparto in users_data:
+            existing = User.query.filter_by(username=username).first()
             if not existing:
+                user = User(username=username, role=role, reparto=reparto)
+                user.set_password(password)
                 db.session.add(user)
-                print(f"✅ Utente creato: {user.username}")
+                print(f"✅ Utente creato: {username}")
             else:
-                print(f"⚠️  Utente già esistente: {user.username}")
+                print(f"⚠️  Utente già esistente: {username}")
         
         db.session.commit()
         print("✅ Utenti salvati")
