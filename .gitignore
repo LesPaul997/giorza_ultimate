@@ -1,10 +1,6 @@
 # mai committare file di segreti
 .env
-
-# ignora i file .txt generici, ma non requirements.txt o modifiche_applicate.txt
-*.txt
-!requirements.txt
-!modifiche_applicate.txt
+.txt
 
 # Database
 *.db
@@ -25,4 +21,3 @@ __pycache__/
 .idea/
 venv/
 .venv/
-node_modules/
