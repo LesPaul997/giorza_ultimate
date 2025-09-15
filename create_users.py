@@ -16,10 +16,10 @@ with app.app_context():
         if not User.query.filter_by(username=username).first():
             user = User(
                 username=username,
-                password_hash=generate_password_hash('pass'),
                 role='picker',
                 reparto=codice
             )
+            user.set_password('pass')
             db.session.add(user)
             utenti_creati.append(f"{username} ({nome})")
     
@@ -27,9 +27,9 @@ with app.app_context():
     if not User.query.filter_by(username='cassier1').first():
         cassiere = User(
             username='cassier1',
-            password_hash=generate_password_hash('pass'),
             role='cassa'
         )
+        cassiere.set_password('pass')
         db.session.add(cassiere)
         utenti_creati.append('cassier1 (cassa)')
     
@@ -37,9 +37,9 @@ with app.app_context():
     if not User.query.filter_by(username='display').first():
         display_user = User(
             username='display',
-            password_hash=generate_password_hash('display'),
             role='display'
         )
+        display_user.set_password('display')
         db.session.add(display_user)
         utenti_creati.append('display (display)')
     
