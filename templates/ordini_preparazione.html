@@ -23,11 +23,13 @@
         </div>
     </div>
 
+
     <!-- Orders Grid (Tablet-friendly) -->
     <div id="ordersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for order in orders %}
         <div class="order-card bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-200 cursor-pointer" 
-             onclick="window.location.href='{{ url_for('order_detail', seriale=order.seriale, back='preparazione') }}'">
+             data-href="{{ url_for('order_detail', seriale=order.seriale, back='preparazione') }}"
+             onclick="handleCardClick(this)">
             <!-- Order Header -->
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center space-x-3">
@@ -90,15 +92,12 @@
                 {% endif %}
             </div>
             
-            <!-- Action Button -->
-            <div class="mt-4">
-                <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                    </svg>
-                    <span>Visualizza</span>
-                </button>
+            <!-- Action Indicator -->
+            <div class="mt-4 flex items-center justify-end text-blue-600 text-sm font-medium">
+                <span>Tocca per continuare preparazione</span>
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
             </div>
         </div>
         {% endfor %}
@@ -118,25 +117,63 @@
 
 <style>
 .order-card {
-    transition: all 0.2s ease-in-out;
+    transition: all 0.15s ease-in-out;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    touch-action: manipulation;
 }
 
 .order-card:hover {
     transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 .order-card:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.98);
+    background-color: #f8fafc;
 }
 
 @media (max-width: 768px) {
     .order-card {
         margin-bottom: 1rem;
+        min-height: 200px; /* Assicura che la card sia abbastanza grande per il touch */
+        padding: 1.5rem; /* Aumenta il padding per un'area touch più grande */
+    }
+    
+    .order-card:active {
+        transform: scale(0.98);
+        background-color: #f8fafc;
+    }
+    
+    /* Migliora l'area touch */
+    .order-card * {
+        pointer-events: none; /* Previene eventi sui figli */
+    }
+    
+    /* Permetti ai bottoni di funzionare */
+    .order-card button {
+        pointer-events: auto !important;
     }
 }
 </style>
 
 <script>
+// Funzione globale per gestire i click sulle card
+function handleCardClick(card) {
+    const href = card.getAttribute('data-href');
+    if (href) {
+        console.log('🔄 Navigazione verso:', href);
+        // Aggiungi feedback visivo
+        card.style.transform = 'scale(0.98)';
+        card.style.backgroundColor = '#f8fafc';
+        
+        // Naviga dopo un breve delay per il feedback
+        setTimeout(() => {
+            window.location.href = href;
+        }, 150);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('searchInput');
     const ordersGrid = document.getElementById('ordersGrid');
@@ -172,6 +209,68 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Focus on search input for better tablet experience
     searchInput.focus();
+    
+    // Aggiungi event listeners touch per ogni card
+    orderCards.forEach(card => {
+        let touchStartTime = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchMoved = false;
+        
+        // Gestione touch per mobile
+        card.addEventListener('touchstart', function(e) {
+            touchStartTime = Date.now();
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            touchMoved = false;
+        });
+        
+        card.addEventListener('touchmove', function(e) {
+            if (e.touches[0].clientX !== touchStartX || e.touches[0].clientY !== touchStartY) {
+                touchMoved = true;
+            }
+        });
+        
+        card.addEventListener('touchend', function(e) {
+            // Se il touch è su un bottone, non fare nulla (il bottone gestirà il click)
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                return;
+            }
+            
+            const touchDuration = Date.now() - touchStartTime;
+            const touchDistance = Math.sqrt(
+                Math.pow(e.changedTouches[0].clientX - touchStartX, 2) + 
+                Math.pow(e.changedTouches[0].clientY - touchStartY, 2)
+            );
+            
+            // Solo se è un tap (non scroll) e non troppo lungo
+            if (!touchMoved && touchDuration < 500 && touchDistance < 10) {
+                e.preventDefault();
+                e.stopPropagation();
+                const href = card.getAttribute('data-href');
+                if (href) {
+                    // Aggiungi feedback visivo
+                    card.style.transform = 'scale(0.98)';
+                    card.style.backgroundColor = '#f8fafc';
+                    
+                    // Naviga dopo un breve delay
+                    setTimeout(() => {
+                        window.location.href = href;
+                    }, 150);
+                }
+            }
+        });
+        
+        // Gestione click per desktop
+        card.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const href = card.getAttribute('data-href');
+            if (href) {
+                window.location.href = href;
+            }
+        });
+    });
     
     // Inizializza lo stato
     filterOrders();

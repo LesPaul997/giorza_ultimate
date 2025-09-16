@@ -28,14 +28,14 @@
         </div>
     </div>
 
-    <!-- Orders Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <!-- Desktop Table -->
+    <div class="hidden md:block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
+            <table class="w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Numero Ordine</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Ordine</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Data</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             {% if current_user.reparto %}Operatore{% else %}Stato Reparti{% endif %}
@@ -53,15 +53,13 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm text-gray-900">{{ order.data_ordine }}</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900">{{ order.nome_cliente }}</div>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900 truncate max-w-xs" title="{{ order.nome_cliente }}">{{ order.nome_cliente }}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             {% if current_user.reparto %}
-                                <!-- Per i picker: mostra solo l'operatore del loro reparto -->
                                 <div class="text-sm font-medium text-green-600">{{ order.status.operatore or 'Non assegnato' }}</div>
                             {% else %}
-                                <!-- Per i cassiere: mostra lo stato per reparto -->
                                 {% if order.status_summary %}
                                     <div class="text-xs text-gray-600 bg-green-50 p-2 rounded border">
                                         {{ order.status_summary }}
@@ -84,10 +82,15 @@
                                 <span class="text-sm text-gray-400">Nessuno</span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <a href="{{ url_for('order_detail', seriale=order.seriale, back='preparati') }}" 
                                class="text-blue-600 hover:text-blue-900 font-medium">
                                 Visualizza
+                            </a>
+                            <span class="text-gray-300">|</span>
+                            <a href="{{ url_for('order_detail', seriale=order.seriale, back='preparati', view='modifiche') }}" 
+                               class="text-green-600 hover:text-green-900 font-medium">
+                                Solo Modifiche
                             </a>
                         </td>
                     </tr>
@@ -95,6 +98,77 @@
                 </tbody>
             </table>
         </div>
+    </div>
+
+    <!-- Mobile Cards -->
+    <div class="md:hidden space-y-4" id="mobileOrdersContainer">
+        {% for order in orders %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer active:scale-98" 
+             onclick="window.location.href='{{ url_for('order_detail', seriale=order.seriale, back='preparati') }}'">
+            
+            <!-- Header -->
+            <div class="flex items-start justify-between mb-3">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Ordine {{ order.numero_ordine }}</h3>
+                    <p class="text-sm text-gray-500">{{ order.data_ordine }}</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="event.stopPropagation(); window.location.href='{{ url_for('order_detail', seriale=order.seriale, back='preparati') }}'" 
+                            class="px-3 py-1 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700">
+                        Visualizza
+                    </button>
+                    <button onclick="event.stopPropagation(); window.location.href='{{ url_for('order_detail', seriale=order.seriale, back='preparati', view='modifiche') }}'" 
+                            class="px-3 py-1 text-xs font-medium rounded-lg text-white bg-green-600 hover:bg-green-700">
+                        Modifiche
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Cliente -->
+            <div class="mb-3">
+                <p class="text-sm font-medium text-gray-900">{{ order.nome_cliente or 'Cliente non disponibile' }}</p>
+            </div>
+            
+            <!-- Stato -->
+            <div class="mb-3">
+                {% if current_user.reparto %}
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-green-600">{{ order.status.operatore or 'Non assegnato' }}</span>
+                    </div>
+                {% else %}
+                    {% if order.status_summary %}
+                        <div class="text-xs text-gray-600 bg-green-50 p-2 rounded border">
+                            {{ order.status_summary }}
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
+            <!-- Letto da -->
+            {% if order.read_by %}
+            <div class="mb-3">
+                <div class="flex flex-wrap gap-1">
+                    {% for reader in order.read_by %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {{ reader }}
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Indicatore -->
+            <div class="flex items-center justify-end text-blue-600 text-sm font-medium">
+                <span>Tocca per visualizzare</span>
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 
     <!-- Empty State -->

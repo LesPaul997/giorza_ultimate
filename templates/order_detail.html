@@ -3,6 +3,24 @@
 {% block title %}Ordine {{ seriale }}{% endblock %}
 
 {% block content %}
+<!-- Banner per modalità "Solo Modifiche" -->
+{% if request.args.get('view') == 'modifiche' %}
+<div class="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+  <div class="flex">
+    <div class="flex-shrink-0">
+      <svg class="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+    </div>
+    <div class="ml-3">
+      <p class="text-sm text-green-700">
+        <strong>Modalità Visualizzazione:</strong> Stai visualizzando solo le modifiche effettuate all'ordine. I bottoni di modifica sono nascosti.
+      </p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Stili per migliore esperienza touch su tablet -->
 <style>
   /* Stili per migliore esperienza touch su tablet */
@@ -94,6 +112,7 @@
         </div>
     </div>
       <div class="flex items-center space-x-3">
+      <!-- Bottone Stampa - sempre visibile -->
       {% if current_user.role == 'picker' %}
       <button
           onclick="openLabelPrintModal()"
@@ -106,22 +125,22 @@
       </button>
       {% endif %}
       
-                              {% if current_user.role == 'cassiere' or current_user.role == 'cassa' %}
-            <div class="flex items-center space-x-2">
-              <a href="/ordine/{{ seriale }}/print" target="_blank" 
-                 class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                </svg>
-                Stampa
-              </a>
-            </div>
-            {% endif %}
+      {% if current_user.role == 'cassiere' or current_user.role == 'cassa' %}
+      <div class="flex items-center space-x-2">
+        <a href="/ordine/{{ seriale }}/print" target="_blank" 
+           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+          </svg>
+          Stampa
+        </a>
+      </div>
+      {% endif %}
       </div>
     </div>
 
     <!-- Status Buttons for Picker - SEZIONE STATO ORA IN ALTO, PRIMA DELLE RIGHE PARZIALI -->
-    {% if current_user.role == 'picker' %}
+    {% if current_user.role == 'picker' and request.args.get('view') != 'modifiche' %}
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200">
         <h2 class="text-lg font-semibold text-gray-900">Stato Ordine</h2>
@@ -301,32 +320,33 @@
     </div>
     {% endif %}
 
-    <!-- Order Details - Layout per Tablet (uno sopra l'altro) -->
+    <!-- Order Details - Layout a tutto schermo -->
     <div class="space-y-6">
-      <!-- Original Lines - Blocco Superiore (ENFATIZZATO) -->
+      <!-- Original Lines - Blocco Superiore -->
       {% if not partial_view %}
-      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
-        <div class="px-6 py-4 border-b border-blue-200 bg-blue-100">
-          <h2 class="text-xl font-bold text-blue-900">📋 Righe Ordine</h2>
-          <p class="text-sm text-blue-700 mt-1">Articoli richiesti dal cliente</p>
-        </div>
-        
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-blue-200">
-            <thead class="bg-blue-100">
+      <!-- Header senza contenitore -->
+      <div class="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <h2 class="text-xl font-bold text-gray-900">📋 Righe Ordine</h2>
+        <p class="text-sm text-gray-600 mt-1">Articoli richiesti dal cliente</p>
+      </div>
+      
+      <!-- Desktop Table -->
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
               <tr>
-                <th class="px-3 lg:px-6 py-4 text-left text-xs lg:text-sm font-bold text-blue-900 uppercase tracking-wider">
+                <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Articolo
                 </th>
-                <th class="px-3 lg:px-6 py-4 text-left text-xs lg:text-sm font-bold text-blue-900 uppercase tracking-wider">
+                <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
                   Quantità
                 </th>
-                <th class="px-3 lg:px-6 py-4 text-left text-xs lg:text-sm font-bold text-blue-900 uppercase tracking-wider">
+                <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">
                   Azioni
                 </th>
             </tr>
           </thead>
-            <tbody class="bg-white divide-y divide-blue-200">
+            <tbody class="bg-white divide-y divide-gray-200">
           {% for l in lines %}
             {% set confirmed = l.codice_articolo in edited_articoli %}
                 <tr class="{{ 'bg-green-50 border-l-4 border-green-400' if confirmed else 'bg-gray-100' if l.removed else 'bg-white' }} hover:bg-blue-50 transition-colors duration-150 {{ 'opacity-50' if l.removed or l.unavailable else '' }} py-2">
@@ -398,8 +418,8 @@
                     {% endif %}
                   </td>
                   <td class="px-4 lg:px-8 py-6 lg:py-8 text-xs lg:text-sm font-medium">
-                {% if current_user.role == 'picker' and not l.removed %}
-                <div class="grid grid-cols-2 gap-2">
+                {% if current_user.role == 'picker' and not l.removed and request.args.get('view') != 'modifiche' %}
+                <div class="grid grid-cols-2 gap-3">
                   {% if l.is_added %}
                   <div class="col-span-2 text-xs text-gray-500 mb-1">Aggiunta — inserisci quantità e conferma</div>
                   <div class="col-span-2 flex items-center gap-2">
@@ -412,10 +432,10 @@
                   <!-- Bottone Modifica -->
                   <button
                     onclick="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
-                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                     title="Modifica quantità e unità di misura"
                   >
-                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
                     Modifica
@@ -424,10 +444,10 @@
                   <!-- Bottone Conferma -->
                       <button
                     onclick="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
-                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                     title="Conferma articolo preparato"
                       >
-                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     Conferma
@@ -436,10 +456,10 @@
                   <!-- Bottone Cattura -->
                       <button
                     onclick="openCaptureModal('{{ l.codice_articolo }}')"
-                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                     title="Scatta foto o carica documento"
                   >
-                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
@@ -449,10 +469,10 @@
                   <!-- Bottone Note -->
                       <button
                     onclick="openNoteModal('{{ l.codice_articolo }}')"
-                    class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                     title="Aggiungi note per questo articolo"
                       >
-                    <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     Note
@@ -465,6 +485,121 @@
         </tbody>
       </table>
         </div>
+
+      <!-- Mobile Cards -->
+      <div class="md:hidden space-y-4">
+        {% for l in lines %}
+          {% set confirmed = l.codice_articolo in edited_articoli %}
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 {{ 'border-l-4 border-l-green-400 bg-green-50' if confirmed else 'bg-gray-100' if l.removed else '' }} {{ 'opacity-50' if l.removed or l.unavailable else '' }}">
+            
+            <!-- Header con icona e info principali -->
+            <div class="flex items-start space-x-3 mb-4">
+              <div class="flex-shrink-0 w-12 h-12 bg-blue-200 rounded-xl flex items-center justify-center">
+                <svg class="w-6 h-6 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+              </div>
+              
+              <div class="flex-1 min-w-0">
+                {% if l.descrizione_articolo %}
+                  <h3 class="text-base font-semibold text-gray-900 leading-tight">{{ l.descrizione_articolo }}</h3>
+                {% else %}
+                  <h3 class="text-base font-semibold text-gray-900 leading-tight">{{ l.codice_articolo }}</h3>
+                {% endif %}
+                
+                <p class="text-sm text-gray-600 font-mono mt-1">{{ l.codice_articolo }}</p>
+                
+                {% if l.descrizione_supplementare %}
+                  <p class="text-sm text-gray-500 mt-1">{{ l.descrizione_supplementare }}</p>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Data evasione -->
+            {% if l.data_evasione %}
+              <div class="flex items-center text-sm text-gray-600 mb-3">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                Data di evasione: {{ l.data_evasione }}
+              </div>
+            {% endif %}
+
+            <!-- Quantità -->
+            <div class="mb-4">
+              {% if l.removed %}
+                <div class="text-lg font-bold text-red-500 line-through">{{ l.quantita }} {{ l.unita_misura }}</div>
+                <div class="text-sm text-red-600">Rimossa</div>
+              {% elif confirmed %}
+                <div class="space-y-2">
+                  <div class="text-sm text-gray-500 line-through">{{ l.quantita }} {{ l.unita_misura }}</div>
+                  {% if l.unita_misura_2 and l.quantita_um2 %}
+                    <div class="text-sm text-gray-500 line-through">= {{ l.quantita_um2 }} {{ l.unita_misura_2 }}</div>
+                  {% endif %}
+                  <div class="text-lg font-bold text-green-600">{{ edit.quantita_nuova if edit else l.quantita }} {{ edit.unita_misura if edit else l.unita_misura }}</div>
+                </div>
+              {% else %}
+                <div class="text-lg font-bold text-gray-900">{{ l.quantita }} {{ l.unita_misura }}</div>
+                {% if l.unita_misura_2 and l.quantita_um2 %}
+                  <div class="text-sm text-gray-600 mt-1">= {{ l.quantita_um2 }} {{ l.unita_misura_2 }}</div>
+                {% endif %}
+              {% endif %}
+            </div>
+
+            <!-- Bottoni Azioni -->
+            {% if current_user.role == 'picker' and not l.removed and request.args.get('view') != 'modifiche' %}
+              <div class="grid grid-cols-2 gap-3 px-2">
+                {% if l.is_added %}
+                  <div class="col-span-2 text-xs text-gray-500 mb-2">Aggiunta — inserisci quantità e conferma</div>
+                  <div class="col-span-2 flex items-center gap-2">
+                    <input type="number" step="0.01" min="0" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg" id="qty_{{ loop.index }}" placeholder="Quantità">
+                    <span class="text-gray-700 text-sm">{{ l.unita_misura }}</span>
+                    <button onclick="confirmAddedLine('{{ l.codice_articolo }}','{{ l.unita_misura }}','qty_{{ loop.index }}')"
+                            class="px-4 py-2 text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700">Conferma</button>
+                  </div>
+                {% endif %}
+                
+                <!-- Bottone Modifica -->
+                <button onclick="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                  Modifica
+                </button>
+                
+                <!-- Bottone Conferma -->
+                <button onclick="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Conferma
+                </button>
+                
+                <!-- Bottone Cattura -->
+                <button onclick="openCaptureModal('{{ l.codice_articolo }}')"
+                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  </svg>
+                  Cattura
+                </button>
+                
+                <!-- Bottone Note -->
+                <button onclick="openNoteModal('{{ l.codice_articolo }}')"
+                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                  Note
+                </button>
+              </div>
+            {% endif %}
+
+          </div>
+        {% endfor %}
       </div>
       {% endif %}
 
@@ -619,22 +754,22 @@
         <div id="modificheContent" class="hidden">
           {% if edits %}
           <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
+            <table class="w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Articolo
                   </th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
                     Quantità
                   </th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16 hidden sm:table-cell">
                     U.M.
                   </th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                     Operatore
                   </th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20 hidden lg:table-cell">
                     Ora
                   </th>
               </tr>
@@ -741,17 +876,20 @@ async function salvaNotaResiduo(codice) {
 }
 </script>
 {% endif %}
-  <!-- Back Button -->
+  </div>
+
+<!-- Back Button - Fuori dal contenitore principale -->
+<div class="w-full py-4" style="margin-left: -2rem; margin-right: -2rem; padding-left: 2rem; padding-right: 2rem;">
   <div class="flex justify-start">
     <a href="{% if request.args.get('back') == 'preparazione' %}{{ url_for('ordini_preparazione') }}{% elif request.args.get('back') == 'preparati' %}{{ url_for('ordini_preparati') }}{% elif request.args.get('back') == 'parziali' %}{{ url_for('ordini_da_completare') }}{% else %}{{ url_for('index') }}{% endif %}" 
-       class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
-      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+       class="inline-flex items-center px-6 py-4 border border-gray-300 shadow-lg text-lg font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1">
+      <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
       </svg>
       Torna agli Ordini
     </a>
   </div>
-  </div>
+</div>
 
 <!-- Modal Materiale Non Disponibile -->
 <div id="unavailableModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
@@ -1240,6 +1378,38 @@ async function submitUnavailable() {
     window.location.reload();
   } catch (e) {
     alert('Errore di rete nel salvataggio');
+  }
+}
+
+// Funzione per marcare un singolo articolo come non disponibile (mobile)
+async function markSingleUnavailable(articolo) {
+  if (!confirm(`Sei sicuro di voler segnare l'articolo ${articolo} come non disponibile?`)) {
+    return;
+  }
+  
+  const substitution = prompt('Inserisci una sostituzione proposta (opzionale):');
+  
+  try {
+    const payload = [{
+      articolo: articolo,
+      unavailable: true,
+      substitution_text: substitution ? substitution.trim() : ''
+    }];
+    
+    const res = await fetch(`/ordine/${encodeURIComponent('{{ seriale }}')}/unavailable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Errore: ' + data.error);
+    }
+  } catch (e) {
+    alert('Errore: ' + e.message);
   }
 }
 
@@ -2214,37 +2384,53 @@ window.deleteAttachment = function(attachmentId) {
     
     async function checkForUpdates() {
       try {
+        console.log('🔄 [DEBUG] Inizio controllo aggiornamenti...');
+        
         // Controlla se l'utente sta scrivendo
         checkUserActivity();
         
         // Se l'utente sta scrivendo, salva il contenuto ma non ricaricare
         if (isUserTyping) {
-          console.log('👤 Utente sta scrivendo - Salvo contenuto ma non ricarico');
+          console.log('👤 [DEBUG] Utente sta scrivendo - Salvo contenuto ma non ricarico');
           saveFormContent();
           return;
         }
         
-        console.log('🔍 Controllo aggiornamenti per ordine:', seriale);
-        const response = await fetch('/api/refresh');
-        const data = await response.json();
+        console.log('🔍 [DEBUG] Controllo aggiornamenti per ordine:', seriale);
+        console.log('🌐 [DEBUG] Chiamata API a /api/refresh...');
         
-        console.log('📊 Risposta API refresh:', data);
+        const response = await fetch('/api/refresh', {
+          credentials: 'same-origin' // Include i cookie di sessione
+        });
+        console.log('📡 [DEBUG] Risposta ricevuta, status:', response.status);
+        
+        if (!response.ok) {
+          console.error('❌ [DEBUG] Errore HTTP:', response.status, response.statusText);
+          return;
+        }
+        
+        const data = await response.json();
+        console.log('📊 [DEBUG] Dati ricevuti:', data);
         
         if (data.has_changes && data.modified_orders.includes(seriale)) {
-          console.log('🔄 Modifiche rilevate - Ricarico pagina...');
+          console.log('🔄 [DEBUG] Modifiche rilevate - Ricarico pagina...');
           // Salva contenuto form prima del refresh
           saveFormContent();
           // Mostra notifica
           showUpdateNotification();
           // Ricarica la pagina dopo 2 secondi
           setTimeout(() => {
+            console.log('🔄 [DEBUG] Ricaricamento pagina...');
             window.location.reload();
           }, 2000);
         } else {
-          console.log('✅ Nessuna modifica rilevata per questo ordine');
+          console.log('✅ [DEBUG] Nessuna modifica rilevata per questo ordine');
+          console.log('📋 [DEBUG] Ordini modificati:', data.modified_orders);
+          console.log('🎯 [DEBUG] Ordine corrente:', seriale);
         }
       } catch (error) {
-        console.error('Errore nel controllo aggiornamenti:', error);
+        console.error('❌ [DEBUG] Errore durante il controllo aggiornamenti:', error);
+        console.error('❌ [DEBUG] Stack trace:', error.stack);
       }
     }
 
@@ -2270,6 +2456,15 @@ window.deleteAttachment = function(attachmentId) {
 
     // Avvia il controllo automatico
     console.log('🚀 Avvio controllo automatico aggiornamenti ogni 30 secondi');
+    console.log('📋 Serial dell\'ordine:', seriale);
+    console.log('⏰ Intervallo impostato a 30 secondi');
+    
+    // Test immediato per verificare che funzioni
+    setTimeout(() => {
+      console.log('🧪 Test iniziale del sistema di refresh...');
+      checkForUpdates();
+    }, 5000); // Test dopo 5 secondi
+    
     refreshInterval = setInterval(checkForUpdates, 30000); // Ogni 30 secondi
 
     // Pulisci l'intervallo quando la pagina viene chiusa

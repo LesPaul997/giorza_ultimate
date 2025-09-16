@@ -38,12 +38,13 @@
             <p class="text-sm text-gray-500 mt-1">Ultimo aggiornamento: <span id="lastUpdate">-</span></p>
         </div>
         
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
+        <!-- Desktop Table -->
+        <div class="hidden md:block overflow-x-auto">
+            <table class="w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Numero Ordine
+                            Ordine
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Data
@@ -54,7 +55,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Status
                         </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Azioni
                         </th>
                     </tr>
@@ -63,6 +64,11 @@
                     <!-- Orders will be loaded here -->
                 </tbody>
             </table>
+        </div>
+
+        <!-- Mobile Cards -->
+        <div class="md:hidden space-y-4" id="mobileOrdersContainer">
+            <!-- Mobile orders will be loaded here -->
         </div>
         
         <!-- Empty State -->
@@ -116,6 +122,10 @@
 .shake {
   animation: shake 0.3s ease-in-out infinite;
 }
+
+.active\:scale-98:active {
+  transform: scale(0.98);
+}
 </style>
 
 <script>
@@ -163,6 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayOrders(orders) {
         if (orders.length === 0) {
             ordersTableBody.innerHTML = '';
+            document.getElementById('mobileOrdersContainer').innerHTML = '';
             emptyState.classList.remove('hidden');
             loadingState.classList.add('hidden');
             return;
@@ -171,6 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
         emptyState.classList.add('hidden');
         loadingState.classList.add('hidden');
         
+        // Desktop table
         ordersTableBody.innerHTML = orders.map(order => `
             <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -201,6 +213,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     </a>
                 </td>
             </tr>
+        `).join('');
+
+        // Mobile cards
+        document.getElementById('mobileOrdersContainer').innerHTML = orders.map(order => `
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer active:scale-98" 
+                 onclick="window.location.href='/ordine/${order.seriale}'">
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Ordine ${order.numero_ordine}</h3>
+                        <p class="text-sm text-gray-500">${formatDate(order.data_ordine)}</p>
+                    </div>
+                    ${getStatusBadge(order.status)}
+                </div>
+                
+                <div class="mb-3">
+                    <p class="text-sm font-medium text-gray-900">${order.nome_cliente || 'Cliente non disponibile'}</p>
+                    ${order.status_operatore ? `<p class="text-xs text-gray-500">Operatore: ${order.status_operatore}</p>` : ''}
+                </div>
+                
+                ${order.ritiro && order.ritiro.trim() ? `
+                    <div class="mb-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                            ${order.ritiro.toLowerCase().includes('ritiro') ? '📦' : 
+                              order.ritiro.toLowerCase().includes('consegna') ? '🚚' : '📋'} ${order.ritiro}
+                        </span>
+                    </div>
+                ` : ''}
+                
+                <div class="flex items-center justify-end text-blue-600 text-sm font-medium">
+                    <span>Tocca per visualizzare</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
         `).join('');
     }
 
