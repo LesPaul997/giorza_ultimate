@@ -55,6 +55,7 @@ SELECT
         LTRIM(RTRIM(M.MVCODCON))
     )                                         AS cliente_codice,
     C.ANDESCRI                                AS nome_cliente,
+    M.MV__NOTE                                AS note_cliente,
     M.MVDESDOC                                AS ritiro,
     D.MVCODART                                AS codice_articolo,
     D.MVCODART                                AS articolo,
@@ -97,11 +98,30 @@ def estrai_ordini() -> None:
         rows = cur.fetchall()
         headers = [col[0] for col in cur.description]
 
+    # Elabora i dati per gestire i clienti generici
+    processed_rows = []
+    for row in rows:
+        row_dict = dict(zip(headers, row))
+        
+        # Se il cliente è 1000, usa il campo note_cliente
+        cliente_codice = str(row_dict.get('cliente_codice', '')).strip()
+        note_cliente = str(row_dict.get('note_cliente', '')).strip()
+        
+        if cliente_codice == '000000000001000' or cliente_codice == '1000':
+            # Usa il campo note_cliente come nome cliente se disponibile
+            if note_cliente and note_cliente != '':
+                row_dict['nome_cliente'] = note_cliente
+                # print(f"🔄 Cliente generico sostituito: '{note_cliente}'")  # Debug log
+        
+        # Ricostruisce la riga nell'ordine originale
+        processed_row = [row_dict.get(header, '') for header in headers]
+        processed_rows.append(processed_row)
+
     # Scrive il CSV
     with CSV_PATH.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
-        writer.writerows(rows)
+        writer.writerows(processed_rows)
 
     print(f"CSV generato: {CSV_PATH.relative_to(Path.cwd())}")
 
