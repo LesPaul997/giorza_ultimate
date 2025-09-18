@@ -144,6 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let lastOrderSeriali = new Set(); // Per tenere traccia dei seriali degli ordini precedenti
     let isFirstLoad = true; // Flag per il primo caricamento
     let isPolling = true;
+    let notifiedOrders = new Set(); // Traccia gli ordini già notificati
 
     function formatDate(dateString) {
         const date = new Date(dateString);
@@ -268,36 +269,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function playNotificationSound() {
         try {
-            // Create a more noticeable sound using Web Audio API
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
-            // Create multiple oscillators for a more complex sound
-            const frequencies = [800, 1000, 1200]; // Multiple frequencies
-            const oscillators = [];
-            const gainNodes = [];
+            // BEEP SINGOLO FORTISSIMO PER AMBIENTE ESTERNO
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
             
-            frequencies.forEach((freq, index) => {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                
-                // Create a pattern of beeps
-                const startTime = audioContext.currentTime + (index * 0.1);
-                oscillator.start(startTime);
-                oscillator.stop(startTime + 0.3);
-                
-                oscillators.push(oscillator);
-                gainNodes.push(gainNode);
-            });
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
             
-            // Also try to play the audio files as backup
+            // Suono fortissimo: frequenza alta e volume massimo
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(1200, audioContext.currentTime); // Frequenza alta per essere più udibile
+            
+            // Volume MASSIMO per ambiente esterno
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(1.0, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+            
+            // Beep lungo e forte
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.8);
+            
+            console.log(`🔊 Suono di notifica: BEEP SINGOLO FORTISSIMO (0.8s, 1200Hz)`);
+            
+            // Backup con file audio se disponibile
             try {
                 notificationSound.currentTime = 0;
+                notificationSound.volume = 1.0; // Volume massimo
                 await notificationSound.play();
             } catch (audioError) {
                 console.log('Audio file playback failed:', audioError);
@@ -305,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (error) {
             console.log('Web Audio API failed:', error);
-            // Fallback to simple beep
+            // Fallback: beep singolo fortissimo
             try {
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
@@ -314,11 +313,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
                 
-                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-                gainNode.gain.setValueAtTime(0.8, audioContext.currentTime);
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(1.0, audioContext.currentTime);
                 
+                // Beep singolo fortissimo di 0.8 secondi
                 oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.5);
+                oscillator.stop(audioContext.currentTime + 0.8);
             } catch (fallbackError) {
                 console.log('Fallback audio also failed:', fallbackError);
             }
@@ -332,11 +333,27 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add shake effect to the page
         document.body.classList.add('shake');
         
-        // Hide after 5 seconds
+        // Flash effect più intenso
+        let flashCount = 0;
+        const flashInterval = setInterval(() => {
+            if (flashCount % 2 === 0) {
+                notificationOverlay.style.opacity = '0.8';
+            } else {
+                notificationOverlay.style.opacity = '0.3';
+            }
+            flashCount++;
+            if (flashCount >= 8) { // 4 flash completi
+                clearInterval(flashInterval);
+                notificationOverlay.style.opacity = '0.6';
+            }
+        }, 200);
+        
+        // Hide after 6 seconds (più lungo per ambiente esterno)
         setTimeout(() => {
             notificationOverlay.classList.add('hidden');
             document.body.classList.remove('shake');
-        }, 5000);
+            notificationOverlay.style.opacity = '0.6'; // Reset opacity
+        }, 6000);
     }
 
     async function loadOrders() {
@@ -350,6 +367,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update last update time
             lastUpdate.textContent = new Date().toLocaleTimeString('it-IT');
+            
+            // Pulisci gli ordini letti dal tracking delle notifiche
+            orders.forEach(order => {
+                if (order.status && order.status !== 'nuovo') {
+                    notifiedOrders.delete(order.seriale);
+                }
+            });
             
             // Check for new orders and play sound
             const currentOrderSeriali = new Set(orders.map(order => order.seriale));
@@ -368,14 +392,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 (!order.status || order.status === 'nuovo')
             );
             
-            // Se ci sono ordini nuovi E non letti, attiva la notifica
+            // Filtra solo gli ordini che non sono stati ancora notificati
+            const ordersToNotify = newUnreadOrders.filter(order => 
+                !notifiedOrders.has(order.seriale)
+            );
+            
+            // Se ci sono ordini nuovi E non letti E non ancora notificati, attiva la notifica
             // IMPORTANTE: Solo se non è il primo caricamento e se ci sono effettivamente nuovi ordini non letti
-            if (newUnreadOrders.length > 0 && !isFirstLoad) {
-                console.log(`🎉 Nuovi ordini non letti arrivati: ${newUnreadOrders.length}`);
-                console.log('Nuovi seriali non letti:', newUnreadOrders.map(o => o.seriale));
+            if (ordersToNotify.length > 0 && !isFirstLoad) {
+                console.log(`🎉 Nuovi ordini non letti arrivati: ${ordersToNotify.length}`);
+                console.log('Nuovi seriali non letti:', ordersToNotify.map(o => o.seriale));
                 
-                // Play notification sound
+                // Marca questi ordini come notificati
+                ordersToNotify.forEach(order => {
+                    notifiedOrders.add(order.seriale);
+                });
+                
+                // Play notification sound (solo una volta per ordine)
                 await playNotificationSound();
+                
+                // Vibrazione lunga per tablet (se supportata)
+                if (navigator.vibrate) {
+                    // Pattern lungo: vibra-pausa-vibra-pausa-vibra-pausa-vibra-pausa-vibra
+                    navigator.vibrate([300, 200, 300, 200, 300, 200, 300, 200, 300]);
+                }
                 
                 // Show visual notification
                 showVisualNotification();
@@ -383,7 +423,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Show browser notification if supported
                 if ('Notification' in window && Notification.permission === 'granted') {
                     new Notification('Nuovi Ordini', {
-                        body: `${newUnreadOrders.length} nuovo ordine/i non letto/i arrivato/i!`,
+                        body: `${ordersToNotify.length} nuovo ordine/i non letto/i arrivato/i!`,
                         icon: '/favicon.ico',
                         requireInteraction: true, // Keep notification until user interacts
                         tag: 'new-orders' // Group notifications
@@ -463,51 +503,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 30000);
 
-    // Controllo modifiche ordini esistenti ogni 30 secondi
-    async function checkOrderModifications() {
-        try {
-            const response = await fetch('/api/refresh');
-            const data = await response.json();
-            
-            if (data.has_changes) {
-                console.log('🔄 Modifiche agli ordini rilevate - Ricarico lista...');
-                // Ricarica la lista ordini
-                loadOrders();
-                
-                // Mostra notifica
-                showModificationNotification(data.modified_orders.length);
-            }
-        } catch (error) {
-            console.error('Errore nel controllo modifiche ordini:', error);
-        }
-    }
+    // Sistema di notifiche modifiche rimosso
 
-    function showModificationNotification(count) {
-        // Crea notifica visiva
-        const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 bg-orange-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2';
-        notification.innerHTML = `
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-            </svg>
-            <span>${count} ordine/i modificato/i - Lista aggiornata</span>
-        `;
-        document.body.appendChild(notification);
-        
-        // Rimuovi notifica dopo 3 secondi
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 3000);
-    }
-
-    // Avvia il controllo modifiche
-    setInterval(() => {
-        if (isPolling) {
-            checkOrderModifications();
-        }
-    }, 30000);
+    // Controllo modifiche disabilitato
 
     // Pause polling when page is not visible
     document.addEventListener('visibilitychange', function() {

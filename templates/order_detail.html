@@ -705,7 +705,7 @@
                 <label for="attachmentFile" class="block text-sm font-medium text-gray-700 mb-2">
                   File <span class="text-red-500">*</span>
                 </label>
-                <input type="file" id="attachmentFile" name="file" accept="image/*,.pdf,.doc,.docx,.txt" required
+                <input type="file" id="attachmentFile" name="file" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z" required
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <div id="fileError" class="hidden mt-1 text-sm text-red-600"></div>
               </div>
@@ -717,7 +717,7 @@
                 <input type="text" id="attachmentNote" name="note" placeholder="Aggiungi una nota al file..." 
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               </div>
-              <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200" onclick="return validateAttachmentForm()">
+              <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
                 Carica Allegato
               </button>
             </form>
@@ -1507,10 +1507,18 @@ function validateAttachmentForm() {
   }
   
   const file = fileInput.files[0];
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+  const allowedTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+    'application/pdf', 
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain', 'text/csv',
+    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed'
+  ];
   
   if (!allowedTypes.includes(file.type)) {
-    fileError.textContent = 'Tipo di file non supportato. Usa immagini, PDF, documenti Word o file di testo';
+    fileError.textContent = 'Tipo di file non supportato. Usa immagini, PDF, documenti Office, file di testo o archivi';
     fileError.classList.remove('hidden');
     return false;
   }
@@ -2279,14 +2287,14 @@ window.deleteAttachment = function(attachmentId) {
     attachmentForm.addEventListener('submit', function(e) {
       e.preventDefault();
       
+      // Valida il form prima di procedere
+      if (!validateAttachmentForm()) {
+        return;
+      }
+      
       const articolo = attachmentArticolo.value.trim();
       const file = attachmentFile.files[0];
       const note = attachmentNote.value.trim();
-      
-      if (!file) {
-        alert('Seleziona un file');
-        return;
-      }
       
       uploadAttachment(articolo, file, note);
     });
@@ -2294,185 +2302,13 @@ window.deleteAttachment = function(attachmentId) {
     // Carica allegati all'avvio
     loadAttachments();
     
-    // Ripristina contenuto form se presente
-    restoreFormContent();
+    // Ripristino form disabilitato
 
-    // Refresh automatico ogni 30 secondi
-    let refreshInterval;
-    let isUserTyping = false;
-    let lastTypingTime = 0;
+    // Sistema di refresh automatico rimosso per evitare interferenze con la scrittura
     
-    // Salva il contenuto dei form prima del refresh
-    function saveFormContent() {
-      const formData = {};
-      
-      // Salva contenuto note
-      const noteText = document.getElementById('noteText');
-      if (noteText) {
-        formData.noteText = noteText.value;
-      }
-      
-      // Salva contenuto allegati
-      const attachmentNote = document.getElementById('attachmentNote');
-      if (attachmentNote) {
-        formData.attachmentNote = attachmentNote.value;
-      }
-      
-      // Salva articolo selezionato per allegati
-      const attachmentArticolo = document.getElementById('attachmentArticolo');
-      if (attachmentArticolo) {
-        formData.attachmentArticolo = attachmentArticolo.value;
-      }
-      
-      // Salva nel localStorage
-      localStorage.setItem(`formData_${seriale}`, JSON.stringify(formData));
-    }
-    
-    // Ripristina il contenuto dei form dopo il refresh
-    function restoreFormContent() {
-      const savedData = localStorage.getItem(`formData_${seriale}`);
-      if (savedData) {
-        try {
-          const formData = JSON.parse(savedData);
-          
-          // Ripristina note
-          const noteText = document.getElementById('noteText');
-          if (noteText && formData.noteText) {
-            noteText.value = formData.noteText;
-          }
-          
-          // Ripristina allegati
-          const attachmentNote = document.getElementById('attachmentNote');
-          if (attachmentNote && formData.attachmentNote) {
-            attachmentNote.value = formData.attachmentNote;
-          }
-          
-          // Ripristina articolo selezionato
-          const attachmentArticolo = document.getElementById('attachmentArticolo');
-          if (attachmentArticolo && formData.attachmentArticolo) {
-            attachmentArticolo.value = formData.attachmentArticolo;
-          }
-          
-          // Pulisci i dati salvati
-          localStorage.removeItem(`formData_${seriale}`);
-        } catch (error) {
-          console.error('Errore nel ripristino form:', error);
-        }
-      }
-    }
-    
-    // Controlla se l'utente sta scrivendo
-    function checkUserActivity() {
-      const now = Date.now();
-      isUserTyping = (now - lastTypingTime) < 5000; // 5 secondi di inattività
-    }
-    
-    // Event listeners per rilevare attività utente
-    document.addEventListener('input', function(e) {
-      if (e.target.matches('#noteText, #attachmentNote, #attachmentArticolo')) {
-        lastTypingTime = Date.now();
-        isUserTyping = true;
-      }
-    });
-    
-    document.addEventListener('keydown', function(e) {
-      if (e.target.matches('#noteText, #attachmentNote, #attachmentArticolo')) {
-        lastTypingTime = Date.now();
-        isUserTyping = true;
-      }
-    });
-    
-    async function checkForUpdates() {
-      try {
-        console.log('🔄 [DEBUG] Inizio controllo aggiornamenti...');
-        
-        // Controlla se l'utente sta scrivendo
-        checkUserActivity();
-        
-        // Se l'utente sta scrivendo, salva il contenuto ma non ricaricare
-        if (isUserTyping) {
-          console.log('👤 [DEBUG] Utente sta scrivendo - Salvo contenuto ma non ricarico');
-          saveFormContent();
-          return;
-        }
-        
-        console.log('🔍 [DEBUG] Controllo aggiornamenti per ordine:', seriale);
-        console.log('🌐 [DEBUG] Chiamata API a /api/refresh...');
-        
-        const response = await fetch('/api/refresh', {
-          credentials: 'same-origin' // Include i cookie di sessione
-        });
-        console.log('📡 [DEBUG] Risposta ricevuta, status:', response.status);
-        
-        if (!response.ok) {
-          console.error('❌ [DEBUG] Errore HTTP:', response.status, response.statusText);
-          return;
-        }
-        
-        const data = await response.json();
-        console.log('📊 [DEBUG] Dati ricevuti:', data);
-        
-        if (data.has_changes && data.modified_orders.includes(seriale)) {
-          console.log('🔄 [DEBUG] Modifiche rilevate - Ricarico pagina...');
-          // Salva contenuto form prima del refresh
-          saveFormContent();
-          // Mostra notifica
-          showUpdateNotification();
-          // Ricarica la pagina dopo 2 secondi
-          setTimeout(() => {
-            console.log('🔄 [DEBUG] Ricaricamento pagina...');
-            window.location.reload();
-          }, 2000);
-        } else {
-          console.log('✅ [DEBUG] Nessuna modifica rilevata per questo ordine');
-          console.log('📋 [DEBUG] Ordini modificati:', data.modified_orders);
-          console.log('🎯 [DEBUG] Ordine corrente:', seriale);
-        }
-      } catch (error) {
-        console.error('❌ [DEBUG] Errore durante il controllo aggiornamenti:', error);
-        console.error('❌ [DEBUG] Stack trace:', error.stack);
-      }
-    }
+    // Sistema di refresh e notifiche completamente rimosso
 
-    function showUpdateNotification() {
-      // Crea notifica visiva
-      const notification = document.createElement('div');
-      notification.className = 'fixed top-4 right-4 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2';
-      notification.innerHTML = `
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-        </svg>
-        <span>Aggiornamento ordine in corso...</span>
-      `;
-      document.body.appendChild(notification);
-      
-      // Rimuovi notifica dopo 3 secondi
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.parentNode.removeChild(notification);
-        }
-      }, 3000);
-    }
-
-    // Avvia il controllo automatico
-    console.log('🚀 Avvio controllo automatico aggiornamenti ogni 30 secondi');
-    console.log('📋 Serial dell\'ordine:', seriale);
-    console.log('⏰ Intervallo impostato a 30 secondi');
-    
-    // Test immediato per verificare che funzioni
-    setTimeout(() => {
-      console.log('🧪 Test iniziale del sistema di refresh...');
-      checkForUpdates();
-    }, 5000); // Test dopo 5 secondi
-    
-    refreshInterval = setInterval(checkForUpdates, 30000); // Ogni 30 secondi
-
-    // Pulisci l'intervallo quando la pagina viene chiusa
-    window.addEventListener('beforeunload', () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    });
+    // Sistema di refresh automatico completamente disabilitato
     });
   </script>
 {% endblock %}
