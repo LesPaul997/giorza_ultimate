@@ -1009,15 +1009,7 @@ async function salvaNotaResiduo(codice) {
             <div class="space-y-4">
               <div class="flex items-center space-x-3">
                 <input type="checkbox" id="printHeader" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer" checked>
-                <label for="printHeader" class="text-sm font-medium text-gray-700">Includi intestazione ordine</label>
-              </div>
-              <div class="flex items-center space-x-3">
-                <input type="checkbox" id="printBarcode" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer" checked>
-                <label for="printBarcode" class="text-sm font-medium text-gray-700">Includi codice a barre</label>
-              </div>
-              <div class="flex items-center space-x-3">
-                <input type="checkbox" id="printQR" class="w-5 h-5 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2 cursor-pointer">
-                <label for="printQR" class="text-sm font-medium text-gray-700">Includi codice QR</label>
+                <label for="printHeader" class="text-sm font-medium text-gray-700">Includi intestazione ordine e logo</label>
               </div>
               
               <div class="border-t pt-4 mt-4">
@@ -1721,6 +1713,17 @@ function toggleRowSelection(rowElement, event) {
 }
 
 function printSelectedLabels() {
+  // Auto-start preparation quando un picker clicca stampa
+  fetch('/api/ordine/{{ seriale }}/auto-start-preparation', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).catch(error => {
+    console.log('Errore auto-start preparation:', error);
+  });
+  
   const selectedCheckboxes = document.querySelectorAll('.labelCheckbox:checked');
   
   if (selectedCheckboxes.length === 0) {
@@ -1747,8 +1750,6 @@ function printSelectedLabels() {
   // Opzioni di stampa
   const options = {
     printHeader: document.getElementById('printHeader').checked,
-    printBarcode: document.getElementById('printBarcode').checked,
-    printQR: document.getElementById('printQR').checked,
     cutType: document.querySelector('input[name="cutType"]:checked').value
   };
   
@@ -1848,8 +1849,6 @@ function generateLabelPrintContent(selectedLines, options) {
         .order-info { font-size: 10pt; margin-bottom: 2mm; }
         .article-info { font-size: 11pt; font-weight: bold; margin-bottom: 3mm; line-height: 1.2; }
         .quantity { font-size: 12pt; font-weight: bold; text-align: center; margin: 3mm 0; }
-        .barcode { text-align: center; margin-top: 3mm; }
-        .qr-code { text-align: center; margin-top: 3mm; }
         .footer { font-size: 8pt; text-align: center; margin-top: 3mm; color: #666; }
         
         /* Gestione overflow e spaziatura */
@@ -1889,10 +1888,10 @@ function generateLabelPrintContent(selectedLines, options) {
     
     content += `
       <div class="label ${isLast ? 'last-label' : ''}">
-        <div class="logo">
-          <img src="${logoUrl}" alt="Logo">
-        </div>
         ${options.printHeader ? `
+          <div class="logo">
+            <img src="${logoUrl}" alt="Logo">
+          </div>
           <div class="header">
             <div style="font-size: 12pt; font-weight: bold; line-height: 1.1; word-wrap: break-word;">${orderInfo.customer}</div>
             <div style="font-size: 9pt; margin-top: 1mm;">Ordine: ${orderInfo.numero}</div>
@@ -1933,17 +1932,6 @@ function generateLabelPrintContent(selectedLines, options) {
           ` : ''}
         </div>
         
-        ${options.printBarcode ? `
-          <div class="barcode">
-            <div style="font-size: 8pt; font-family: monospace;">${line.articolo}</div>
-          </div>
-        ` : ''}
-        
-        ${options.printQR ? `
-          <div class="qr-code">
-            <div style="font-size: 8pt;">QR: ${orderInfo.seriale}-${line.articolo}</div>
-          </div>
-        ` : ''}
         
         <div class="footer">
           ${orderInfo.seriale} • ${new Date().toLocaleDateString('it-IT')}
