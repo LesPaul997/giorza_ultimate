@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 from typing import Iterable, List
 from datetime import datetime
+import pyodbc
 
 from flask import (
     Flask,
@@ -79,7 +80,7 @@ app.config.update(
 )
 
 # Lazy import del modello: evita dipendenze circolari con db.init_app
-from models import OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, User, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, db  # noqa: E402  pylint: disable=wrong-import-position
+from models import OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, User, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, ArticoloReparto, db  # noqa: E402  pylint: disable=wrong-import-position
 
 db.init_app(app)
 
@@ -2076,6 +2077,111 @@ def delete_attachment(attachment_id):
         
     except Exception as e:
         return jsonify({"error": f"Errore nell'eliminazione: {str(e)}"}), 500
+
+
+# -------------- ADMIN ROUTES -------------------
+@app.route("/admin/refresh-reparti", methods=["GET", "POST"])
+@login_required
+def refresh_reparti():
+    """Interfaccia per aggiornare i reparti dal database SQL Server"""
+    if current_user.role not in ["cassiere", "cassa"]:
+        abort(403)
+    
+    if request.method == "GET":
+        # Controlla se è stata inserita la password corretta
+        admin_password = request.args.get('password')
+        if admin_password != "Zarrella123":
+            return render_template("admin_password.html")
+        
+        # Mostra il form
+        return render_template("admin_refresh_reparti.html")
+    
+    # POST method - aggiorna i reparti
+    
+    try:
+        # 1. Connessione al database SQL Server (via ngrok)
+        conn_str = os.getenv("MSSQL_CONNSTRING_DEMO")
+        if not conn_str:
+            return jsonify({"success": False, "error": "Stringa di connessione non configurata"}), 500
+        
+        conn = pyodbc.connect(conn_str)
+        
+        # 2. Query per estrarre i reparti
+        query = """
+        SELECT 
+            ARCODART                                AS codice_articolo,
+            ARTIPCO1                                AS tipo_collo_1,
+            ARTIPCO2                                AS tipo_collo_2,
+            ARUNMIS2                                AS unita_misura_2,
+            AROPERAT                                AS operatore_conversione,
+            ARMOLTIP                                AS fattore_conversione
+        FROM ZARREART_ICOL
+        WHERE ARCODART IS NOT NULL 
+          AND ARCODART <> ''
+        ORDER BY ARCODART;
+        """
+        
+        # 3. Esegui query e ottieni risultati
+        with conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+            headers = [col[0] for col in cur.description]
+        
+        conn.close()
+        
+        # 4. Carica i dati nel database PostgreSQL
+        articoli_caricati = 0
+        articoli_aggiornati = 0
+        
+        # Pulisci la tabella esistente
+        ArticoloReparto.query.delete()
+        db.session.commit()
+        
+        # Carica i nuovi dati
+        for row in rows:
+            row_dict = dict(zip(headers, row))
+            codice_articolo = row_dict['codice_articolo'].strip() if row_dict['codice_articolo'] else ''
+            
+            # Salta righe vuote o con codici non validi
+            if not codice_articolo or codice_articolo in ['.', '..']:
+                continue
+            
+            articolo = ArticoloReparto(
+                codice_articolo=codice_articolo,
+                tipo_collo_1=row_dict['tipo_collo_1'].strip() if row_dict['tipo_collo_1'] else None,
+                tipo_collo_2=row_dict['tipo_collo_2'].strip() if row_dict['tipo_collo_2'] else None,
+                unita_misura_2=row_dict['unita_misura_2'].strip() if row_dict['unita_misura_2'] else None,
+                operatore_conversione=row_dict['operatore_conversione'].strip() if row_dict['operatore_conversione'] else None,
+                fattore_conversione=float(row_dict['fattore_conversione']) if row_dict['fattore_conversione'] and str(row_dict['fattore_conversione']).strip() else None
+            )
+            db.session.add(articolo)
+            articoli_caricati += 1
+        
+        # Commit delle modifiche
+        db.session.commit()
+        
+        # 5. Forza il refresh della cache degli ordini
+        refresh_orders()
+        
+        return jsonify({
+            "success": True,
+            "message": "Reparti aggiornati con successo",
+            "articoli_caricati": articoli_caricati,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except pyodbc.Error as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": f"Errore connessione database: {str(e)}"
+        }), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": f"Errore generico: {str(e)}"
+        }), 500
 
 
 # -------------- TRASPORTI DASHBOARD -------------------

@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Aggiorna Reparti - Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white shadow-lg rounded-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">🔧 Aggiorna Reparti</h1>
+        
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">
+                        ⚠️ Attenzione
+                    </h3>
+                    <div class="mt-2 text-sm text-yellow-700">
+                        <p>Questa operazione aggiornerà tutti i reparti dal database di produzione. L'operazione potrebbe richiedere alcuni minuti.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-blue-900 mb-2">📋 Cosa fa questa operazione:</h3>
+                <ul class="text-sm text-blue-800 space-y-1">
+                    <li>• Si connette al database SQL Server (via ngrok)</li>
+                    <li>• Estrae tutti i reparti dalla tabella ZARREART_ICOL</li>
+                    <li>• Sostituisce completamente i dati nella tabella ArticoloReparto</li>
+                    <li>• Aggiorna automaticamente la cache degli ordini</li>
+                </ul>
+            </div>
+
+            <div id="loadingSection" class="hidden">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        <span class="ml-3 text-gray-700">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resultSection" class="hidden">
+                <div id="successResult" class="hidden bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-green-800">
+                                ✅ Successo!
+                            </h3>
+                            <div class="mt-2 text-sm text-green-700">
+                                <p id="successMessage"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="errorResult" class="hidden bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">
+                                ❌ Errore
+                            </h3>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p id="errorMessage"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex space-x-4">
+                <button 
+                    id="refreshButton"
+                    onclick="refreshReparti()"
+                    class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Aggiorna Reparti
+                </button>
+
+                <a 
+                    href="{{ url_for('index') }}"
+                    class="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Torna agli Ordini
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function refreshReparti() {
+    const loadingSection = document.getElementById('loadingSection');
+    const resultSection = document.getElementById('resultSection');
+    const successResult = document.getElementById('successResult');
+    const errorResult = document.getElementById('errorResult');
+    const refreshButton = document.getElementById('refreshButton');
+    
+    // Mostra loading
+    loadingSection.classList.remove('hidden');
+    resultSection.classList.add('hidden');
+    refreshButton.disabled = true;
+    refreshButton.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    try {
+        const response = await fetch('/admin/refresh-reparti', {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        
+        // Nascondi loading
+        loadingSection.classList.add('hidden');
+        resultSection.classList.remove('hidden');
+        
+        if (data.success) {
+            successResult.classList.remove('hidden');
+            errorResult.classList.add('hidden');
+            document.getElementById('successMessage').textContent = 
+                `${data.message} - Articoli caricati: ${data.articoli_caricati}`;
+        } else {
+            successResult.classList.add('hidden');
+            errorResult.classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = data.error || 'Errore sconosciuto';
+        }
+        
+    } catch (error) {
+        // Nascondi loading
+        loadingSection.classList.add('hidden');
+        resultSection.classList.remove('hidden');
+        
+        successResult.classList.add('hidden');
+        errorResult.classList.remove('hidden');
+        document.getElementById('errorMessage').textContent = `Errore di rete: ${error.message}`;
+    }
+    
+    // Riabilita il bottone
+    refreshButton.disabled = false;
+    refreshButton.classList.remove('opacity-50', 'cursor-not-allowed');
+}
+</script>
+{% endblock %}
