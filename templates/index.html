@@ -358,7 +358,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadOrders() {
         try {
-            const response = await fetch('/api/orders');
+            const response = await fetch('/api/orders', {
+                credentials: 'same-origin'
+            });
             const orders = await response.json();
             
             currentOrders = orders;

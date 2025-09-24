@@ -832,12 +832,6 @@ def ordini_preparazione():
                 order["read_by"] = [read.operatore for read in reads]
                 order["status"] = my_reparto_status
                 orders_with_status.append(order)
-            elif not my_reparto_status.get('status') or my_reparto_status.get('status') == 'nuovo':
-                # Se il reparto non ha ancora uno stato, mostra l'ordine come "nuovo"
-                reads = OrderRead.query.filter_by(seriale=order["seriale"]).all()
-                order["read_by"] = [read.operatore for read in reads]
-                order["status"] = {"status": "nuovo", "operatore": None, "timestamp": None}
-                orders_with_status.append(order)
         else:
             # Per i cassiere: mostra ordini che hanno almeno un reparto in preparazione
             # ma non tutti i reparti pronti
@@ -1862,11 +1856,6 @@ def add_order_note(seriale):
         nota=nota
     )
     db.session.add(order_note)
-    
-    # Auto-start preparation quando un picker interagisce con l'ordine
-    if current_user.role == "picker" and current_user.reparto:
-        auto_start_preparation(seriale, current_user.username, current_user.reparto)
-    
     db.session.commit()
     
     return jsonify({
@@ -1957,11 +1946,6 @@ def upload_attachment(seriale):
             note=note
         )
         db.session.add(attachment)
-        
-        # Auto-start preparation quando un picker interagisce con l'ordine
-        if current_user.role == "picker" and current_user.reparto:
-            auto_start_preparation(seriale, current_user.username, current_user.reparto)
-        
         db.session.commit()
         
         return jsonify({

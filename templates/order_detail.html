@@ -1713,17 +1713,6 @@ function toggleRowSelection(rowElement, event) {
 }
 
 function printSelectedLabels() {
-  // Auto-start preparation quando un picker clicca stampa
-  fetch('/api/ordine/{{ seriale }}/auto-start-preparation', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  }).catch(error => {
-    console.log('Errore auto-start preparation:', error);
-  });
-  
   const selectedCheckboxes = document.querySelectorAll('.labelCheckbox:checked');
   
   if (selectedCheckboxes.length === 0) {
