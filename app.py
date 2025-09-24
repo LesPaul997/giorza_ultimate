@@ -722,10 +722,11 @@ def api_orders():
                     status_summary.append(f"{reparto}: {reparto_status.get('status', 'nuovo')}")
                 order["status_summary"] = " | ".join(status_summary)
     
-    # Ordina gli ordini per data (più recente prima) e numero ordine (maggiore prima)
+    # Ordina gli ordini per numero ordine (maggiore prima)
+    # Converte numero_ordine in int per ordinamento corretto
     sorted_orders = sorted(
         unique_orders.values(), 
-        key=lambda x: (x["data_ordine"], x["numero_ordine"]), 
+        key=lambda x: int(x["numero_ordine"]) if x["numero_ordine"] and str(x["numero_ordine"]).isdigit() else 0, 
         reverse=True
     )
     return jsonify(sorted_orders)
@@ -1305,6 +1306,11 @@ def propose_confirm(seriale: str):
         applied=True,
     )
     db.session.add(edit)
+    
+    # Auto-start preparation quando un picker interagisce con l'ordine
+    if current_user.role == "picker" and current_user.reparto:
+        auto_start_preparation(seriale, current_user.username, current_user.reparto)
+    
     db.session.commit()
     back = request.form.get("back")
     if back:
@@ -1326,12 +1332,91 @@ def propose_edit(seriale: str):
         applied=True,
     )
     db.session.add(edit)
+    
+    # Auto-start preparation quando un picker interagisce con l'ordine
+    if current_user.role == "picker" and current_user.reparto:
+        auto_start_preparation(seriale, current_user.username, current_user.reparto)
+    
     db.session.commit()
     back = request.form.get("back")
     if back:
         return redirect(url_for("order_detail", seriale=seriale, back=back))
     return redirect(url_for("order_detail", seriale=seriale))
 
+
+# ---------- API FOR AUTO-PREPARATION --------------
+@app.route("/api/ordine/<seriale>/auto-start-preparation", methods=["POST"])
+@login_required
+def api_auto_start_preparation(seriale: str):
+    """API per mettere automaticamente un ordine in preparazione"""
+    if current_user.role != "picker" or not current_user.reparto:
+        abort(403)
+    
+    try:
+        auto_start_preparation(seriale, current_user.username, current_user.reparto)
+        return jsonify({"success": True, "message": "Ordine messo in preparazione"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ---------- HELPER FUNCTIONS --------------
+def auto_start_preparation(seriale: str, operatore: str, reparto: str = None):
+    """Mette automaticamente un ordine in preparazione quando un picker interagisce con esso"""
+    try:
+        if reparto:
+            # Aggiorna o crea lo stato dell'ordine per il reparto specifico
+            existing_status = OrderStatusByReparto.query.filter_by(
+                seriale=seriale, 
+                reparto=reparto
+            ).first()
+            
+            if existing_status:
+                # Aggiorna lo stato esistente solo se non è già in preparazione o pronto
+                if existing_status.status not in ['in_preparazione', 'pronto']:
+                    existing_status.status = 'in_preparazione'
+                    existing_status.operatore = operatore
+                    existing_status.timestamp = db.func.now()
+            else:
+                # Crea nuovo stato per il reparto
+                new_status = OrderStatusByReparto(
+                    seriale=seriale,
+                    reparto=reparto,
+                    status='in_preparazione',
+                    operatore=operatore
+                )
+                db.session.add(new_status)
+            
+            # Aggiorna lo stato generale dell'ordine
+            general_status = OrderStatus.query.filter_by(seriale=seriale).first()
+            if general_status:
+                # Controlla se tutti i reparti sono pronti
+                status_by_reparto = get_ordine_status_by_reparto(seriale)
+                reparti_ordine = get_ordine_reparti(seriale)
+                
+                tutti_pronti = all(
+                    status_by_reparto.get(reparto, {}).get('status') == 'pronto'
+                    for reparto in reparti_ordine
+                )
+                
+                if tutti_pronti:
+                    general_status.status = 'pronto'
+                else:
+                    general_status.status = 'in_preparazione'
+                general_status.operatore = operatore
+                general_status.timestamp = db.func.now()
+            else:
+                new_general_status = OrderStatus(
+                    seriale=seriale,
+                    status='in_preparazione',
+                    operatore=operatore
+                )
+                db.session.add(new_general_status)
+            
+            db.session.commit()
+            print(f"✅ Auto-start preparation: Ordine {seriale} messo in preparazione per reparto {reparto}")
+            
+    except Exception as e:
+        print(f"❌ Errore in auto_start_preparation: {e}")
+        db.session.rollback()
 
 # ---------- ORDER STATUS --------------
 @app.route("/ordine/<seriale>/status", methods=["POST"])
@@ -1521,6 +1606,10 @@ def mark_lines_unavailable(seriale: str):
         # La segnalazione è gestita a livello di riga tramite `UnavailableLine`.
         pass
 
+    # Auto-start preparation quando un picker interagisce con l'ordine
+    if current_user.role == "picker" and current_user.reparto:
+        auto_start_preparation(seriale, current_user.username, current_user.reparto)
+
     db.session.commit()
     return jsonify({"success": True, "updated": updated})
 
@@ -1545,22 +1634,34 @@ def ordini_da_completare():
     residues = query.order_by(PartialOrderResidue.created_at.desc()).all()
 
     # Auto cleanup: se tutte le righe risultano evase nel gestionale per quel seriale/reparto, rimuovi il marker
+    markers_to_remove = []
     for marker in list(residues):
-        seriale = marker.seriale
-        reparto = marker.reparto
-        righe_seriale = [o for o in app.config.get("ORDERS_CACHE", []) if o.get("seriale") == seriale]
-        if reparto:
-            righe_seriale = [o for o in righe_seriale if o.get("codice_reparto") == reparto]
-        if not righe_seriale:
+        try:
+            seriale = marker.seriale
+            reparto = marker.reparto
+            righe_seriale = [o for o in app.config.get("ORDERS_CACHE", []) if o.get("seriale") == seriale]
+            if reparto:
+                righe_seriale = [o for o in righe_seriale if o.get("codice_reparto") == reparto]
+            if not righe_seriale:
+                continue
+            tutte_evase = all(str(o.get("evasa_flag") or '').upper() == 'S' for o in righe_seriale)
+            if tutte_evase:
+                try:
+                    PartialOrderResidue.query.filter_by(seriale=seriale, reparto=reparto).delete()
+                    db.session.commit()
+                    markers_to_remove.append(marker)
+                except Exception:
+                    db.session.rollback()
+        except Exception as e:
+            print(f"⚠️ Errore nel cleanup marker {marker.id if hasattr(marker, 'id') else 'unknown'}: {e}")
+            # Rimuovi il marker problematico dalla lista
+            markers_to_remove.append(marker)
             continue
-        tutte_evase = all(str(o.get("evasa_flag") or '').upper() == 'S' for o in righe_seriale)
-        if tutte_evase:
-            try:
-                PartialOrderResidue.query.filter_by(seriale=seriale, reparto=reparto).delete()
-                db.session.commit()
-                residues.remove(marker)
-            except Exception:
-                db.session.rollback()
+    
+    # Rimuovi i marker processati
+    for marker in markers_to_remove:
+        if marker in residues:
+            residues.remove(marker)
 
     grouped = {}
     for r in residues:
@@ -1761,6 +1862,11 @@ def add_order_note(seriale):
         nota=nota
     )
     db.session.add(order_note)
+    
+    # Auto-start preparation quando un picker interagisce con l'ordine
+    if current_user.role == "picker" and current_user.reparto:
+        auto_start_preparation(seriale, current_user.username, current_user.reparto)
+    
     db.session.commit()
     
     return jsonify({
@@ -1851,6 +1957,11 @@ def upload_attachment(seriale):
             note=note
         )
         db.session.add(attachment)
+        
+        # Auto-start preparation quando un picker interagisce con l'ordine
+        if current_user.role == "picker" and current_user.reparto:
+            auto_start_preparation(seriale, current_user.username, current_user.reparto)
+        
         db.session.commit()
         
         return jsonify({
