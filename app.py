@@ -1339,6 +1339,12 @@ def propose_confirm(seriale: str):
         auto_start_preparation(seriale, current_user.username, current_user.reparto)
     
     db.session.commit()
+    
+    # Invalida la cache per forzare il refresh dell'interfaccia
+    if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
+        app.config['CACHE_MODIFIED'] = True
+        print(f"✅ Quantità confermata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
+    
     back = request.form.get("back")
     if back:
         return redirect(url_for("order_detail", seriale=seriale, back=back))
@@ -1365,6 +1371,12 @@ def propose_edit(seriale: str):
         auto_start_preparation(seriale, current_user.username, current_user.reparto)
     
     db.session.commit()
+    
+    # Invalida la cache per forzare il refresh dell'interfaccia
+    if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
+        app.config['CACHE_MODIFIED'] = True
+        print(f"✅ Quantità modificata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
+    
     back = request.form.get("back")
     if back:
         return redirect(url_for("order_detail", seriale=seriale, back=back))
@@ -1492,18 +1504,41 @@ def update_order_status(seriale: str):
         if general_status:
             if tutti_pronti:
                 general_status.status = 'pronto'
+                print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")
             elif status == 'in_preparazione':
                 general_status.status = 'in_preparazione'
             # rimosso: lo stato "materiale_non_disponibile" non viene più tracciato a livello ordine
             general_status.operatore = current_user.username
             general_status.timestamp = db.func.now()
         else:
+            # Crea nuovo stato generale se non esiste
             new_general_status = OrderStatus(
                 seriale=seriale,
-                status=status,
+                status='pronto' if tutti_pronti else 'in_preparazione',
                 operatore=current_user.username
             )
             db.session.add(new_general_status)
+            if tutti_pronti:
+                print(f"🎉 Nuovo ordine {seriale} COMPLETAMENTE PRONTO!")
+        
+        db.session.commit()
+        
+        # Forza refresh della cache per aggiornare immediatamente l'interfaccia
+        print(f"✅ Stato aggiornato: Ordine {seriale} -> {status} per reparto {current_user.reparto}")
+        if tutti_pronti:
+            print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")
+        
+        # Invalida la cache per forzare il refresh dell'interfaccia
+        if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
+            # Marca la cache come modificata per forzare il refresh
+            app.config['CACHE_MODIFIED'] = True
+            # Forza il refresh immediato della cache
+            try:
+                from app import refresh_orders
+                refresh_orders()
+                print(f"🔄 Cache forzata al refresh per ordine {seriale}")
+            except Exception as e:
+                print(f"⚠️ Errore nel refresh cache: {e}")
 
         # Se il reparto imposta PRONTO, calcola e salva i residui parziali per quel reparto
         if status == 'pronto':
