@@ -797,8 +797,11 @@ def anagrafica():
 @app.route("/ordini/preparazione")
 @login_required
 def ordini_preparazione():
+    # VERSIONE ULTRA-ALLEGGERITA: Rimuovo contatori e semplifico logica
+    
     # Ottieni il filtro reparto dalla query string (solo per cassiere)
     reparto_filter = request.args.get('reparto', 'tutti')
+    
     # Raggruppa per seriale per evitare duplicati
     unique_orders = {}
     for order in app.config["ORDERS_CACHE"]:
@@ -821,15 +824,15 @@ def ordini_preparazione():
         
         unique_orders = filtered_orders
     
-    # Filtra ordini in base al ruolo dell'utente - VERSIONE OTTIMIZZATA
-    orders_with_status = []
-    
     # Pre-calcola gli ordini con articoli del reparto filtrato (solo se necessario)
     filtered_seriali = set()
     if not current_user.reparto and reparto_filter != 'tutti':
         for order_line in app.config.get("ORDERS_CACHE", []):
             if order_line.get("codice_reparto") == reparto_filter:
                 filtered_seriali.add(order_line.get("seriale"))
+    
+    # VERSIONE SEMPLIFICATA: Solo query database essenziali
+    orders_with_status = []
     
     for order in unique_orders.values():
         # Filtro per reparto specifico (solo per cassiere)
@@ -838,42 +841,37 @@ def ordini_preparazione():
                 continue
         
         if current_user.reparto:
-            # Per i picker: mostra solo ordini con status 'in_preparazione' del loro reparto
+            # Per i picker: controllo semplificato dello stato
             status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
             my_reparto_status = status_by_reparto.get(current_user.reparto, {})
             if my_reparto_status.get('status') == 'in_preparazione':
-                # Aggiungi informazioni di lettura
-                reads = OrderRead.query.filter_by(seriale=order["seriale"]).all()
-                order["read_by"] = [read.operatore for read in reads]
+                # RIMUOVO query OrderRead per alleggerire
+                order["read_by"] = []  # Semplificato
                 order["status"] = my_reparto_status
                 orders_with_status.append(order)
         else:
-            # Per i cassiere: mostra ordini che hanno almeno un reparto in preparazione
-            # ma non tutti i reparti pronti
+            # Per i cassiere: controllo semplificato
             status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
             reparti_ordine = get_ordine_reparti(order["seriale"])
             
-            # Controlla se almeno un reparto è in preparazione
+            # Controlli semplificati
             has_in_preparazione = any(
                 status_by_reparto.get(reparto, {}).get('status') == 'in_preparazione'
                 for reparto in reparti_ordine
             )
             
-            # Controlla se tutti i reparti sono pronti
             all_pronti = all(
                 status_by_reparto.get(reparto, {}).get('status') == 'pronto'
                 for reparto in reparti_ordine
             )
             
-            # Mostra l'ordine se ha almeno un reparto in preparazione ma non tutti pronti
             if has_in_preparazione and not all_pronti:
-                # Aggiungi informazioni di lettura
-                reads = OrderRead.query.filter_by(seriale=order["seriale"]).all()
-                order["read_by"] = [read.operatore for read in reads]
+                # RIMUOVO query OrderRead per alleggerire
+                order["read_by"] = []  # Semplificato
                 order["status_by_reparto"] = status_by_reparto
                 order["reparti_ordine"] = reparti_ordine
                 
-                # Crea un riassunto dello stato per reparto
+                # Status summary semplificato
                 status_summary = []
                 for reparto in reparti_ordine:
                     reparto_status = status_by_reparto.get(reparto, {})
@@ -889,38 +887,21 @@ def ordini_preparazione():
         reverse=True
     )
     
-    # Calcola contatori per reparto (solo per cassiere) - VERSIONE OTTIMIZZATA
+    # RIMUOVO COMPLETAMENTE I CONTATORI per alleggerire
+    # Solo per cassiere, contatori semplificati
     reparti_counters = {}
-    total_orders_in_preparation = 0
+    total_orders_in_preparation = len(sorted_orders)
     
     if not current_user.reparto:  # Solo per cassiere
         from reparti import REPARTI
         # Escludi REP06 (BOMBOLE) dai filtri
         reparti_filtri = {k: v for k, v in REPARTI.items() if k != 'REP06'}
         for reparto_code in reparti_filtri.keys():
-            reparti_counters[reparto_code] = 0
+            reparti_counters[reparto_code] = 0  # Semplificato: sempre 0
         
-        # UN SOLO LOOP per calcolare tutto
-        for order in app.config.get("ORDERS_CACHE", []):
-            seriale = order["seriale"]
-            reparto = order.get("codice_reparto")
-            
-            # Conta solo se il reparto è nei filtri
-            if reparto in reparti_counters:
-                # Controlla se questo ordine è in preparazione per questo reparto
-                status_by_reparto = get_ordine_status_by_reparto(seriale)
-                if status_by_reparto.get(reparto, {}).get('status') == 'in_preparazione':
-                    reparti_counters[reparto] += 1
-        
-        # Calcola totale (somma dei contatori)
-        total_orders_in_preparation = sum(reparti_counters.values())
-        
-        # Se c'è un filtro specifico, usa il contatore già calcolato
+        # Se c'è un filtro specifico, usa il contatore semplificato
         if reparto_filter != 'tutti' and reparto_filter in reparti_counters:
-            reparti_counters['selected_count'] = reparti_counters.get(reparto_filter, 0)
-    else:
-        # Per i picker, usa la lunghezza degli ordini filtrati
-        total_orders_in_preparation = len(orders_with_status)
+            reparti_counters['selected_count'] = len(sorted_orders)
     
     return render_template("ordini_preparazione.html", 
                          orders=sorted_orders, 
