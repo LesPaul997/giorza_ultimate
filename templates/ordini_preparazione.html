@@ -23,6 +23,67 @@
         </div>
     </div>
 
+    <!-- Filtri per Reparto (solo per cassiere) -->
+    {% if not current_user.reparto %}
+    <div class="mb-6 bg-blue-50 rounded-xl p-6 border border-blue-200">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">📊 Filtri per Reparto</h3>
+        
+        <!-- Bottoni Reparti -->
+        <div class="mb-4">
+            <div class="flex flex-wrap gap-3">
+                <button class="reparto-btn px-4 py-2 rounded-lg border-2 transition-all duration-200 {% if reparto_filter == 'tutti' %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-700 border-gray-300 hover:border-blue-400{% endif %}" 
+                        data-reparto="tutti">
+                    <div class="text-sm font-semibold">Tutti</div>
+                    <div class="text-xs">{{ total_orders_in_preparation }} ordini</div>
+                </button>
+                
+                <button class="reparto-btn px-4 py-2 rounded-lg border-2 transition-all duration-200 {% if reparto_filter == 'REP01' %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-700 border-gray-300 hover:border-blue-400{% endif %}" 
+                        data-reparto="REP01">
+                    <div class="text-sm font-semibold">REP01</div>
+                    <div class="text-xs">{{ reparti_counters.get('REP01', 0) }} ordini</div>
+                </button>
+                
+                <button class="reparto-btn px-4 py-2 rounded-lg border-2 transition-all duration-200 {% if reparto_filter == 'REP02' %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-700 border-gray-300 hover:border-blue-400{% endif %}" 
+                        data-reparto="REP02">
+                    <div class="text-sm font-semibold">REP02</div>
+                    <div class="text-xs">{{ reparti_counters.get('REP02', 0) }} ordini</div>
+                </button>
+                
+                <button class="reparto-btn px-4 py-2 rounded-lg border-2 transition-all duration-200 {% if reparto_filter == 'REP03' %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-700 border-gray-300 hover:border-blue-400{% endif %}" 
+                        data-reparto="REP03">
+                    <div class="text-sm font-semibold">REP03</div>
+                    <div class="text-xs">{{ reparti_counters.get('REP03', 0) }} ordini</div>
+                </button>
+                
+                <button class="reparto-btn px-4 py-2 rounded-lg border-2 transition-all duration-200 {% if reparto_filter == 'REP04' %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-700 border-gray-300 hover:border-blue-400{% endif %}" 
+                        data-reparto="REP04">
+                    <div class="text-sm font-semibold">REP04</div>
+                    <div class="text-xs">{{ reparti_counters.get('REP04', 0) }} ordini</div>
+                </button>
+                
+                <button class="reparto-btn px-4 py-2 rounded-lg border-2 transition-all duration-200 {% if reparto_filter == 'REP05' %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-700 border-gray-300 hover:border-blue-400{% endif %}" 
+                        data-reparto="REP05">
+                    <div class="text-sm font-semibold">REP05</div>
+                    <div class="text-xs">{{ reparti_counters.get('REP05', 0) }} ordini</div>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Contatore Reparto Selezionato -->
+        <div class="mt-4 text-center">
+            <div class="inline-flex items-center px-6 py-3 bg-gray-800 text-white rounded-lg">
+                <span class="text-lg font-semibold">
+                    {% if reparto_filter == 'tutti' %}
+                        Totale Ordini in Preparazione: {{ total_orders_in_preparation }}
+                    {% else %}
+                        Ordini {{ reparto_filter }} in Preparazione: {{ reparti_counters.get('selected_count', 0) }}
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 
     <!-- Orders Grid (Tablet-friendly) -->
     <div id="ordersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -69,7 +130,7 @@
                                 </svg>
                                 <span class="text-sm font-medium text-blue-600">Stato per Reparto</span>
                             </div>
-                            <div class="text-xs text-gray-600 bg-gray-50 p-2 rounded border">
+                            <div class="text-xs text-gray-600 bg-gray-50 p-2 rounded border reparto-info">
                                 {{ order.status_summary }}
                             </div>
                         </div>
@@ -206,6 +267,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Event listeners
     searchInput.addEventListener('input', filterOrders);
+    
+    // Filtro per reparto con bottoni (solo per cassiere)
+    const repartoButtons = document.querySelectorAll('.reparto-btn');
+    if (repartoButtons.length > 0) {
+        repartoButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const selectedReparto = this.getAttribute('data-reparto');
+                
+                // Aggiorna URL con il filtro selezionato
+                const url = new URL(window.location);
+                if (selectedReparto === 'tutti') {
+                    url.searchParams.delete('reparto');
+                } else {
+                    url.searchParams.set('reparto', selectedReparto);
+                }
+                window.location.href = url.toString();
+            });
+        });
+    }
     
     // Focus on search input for better tablet experience
     searchInput.focus();

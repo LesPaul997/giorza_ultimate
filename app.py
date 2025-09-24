@@ -797,6 +797,8 @@ def anagrafica():
 @app.route("/ordini/preparazione")
 @login_required
 def ordini_preparazione():
+    # Ottieni il filtro reparto dalla query string (solo per cassiere)
+    reparto_filter = request.args.get('reparto', 'tutti')
     # Raggruppa per seriale per evitare duplicati
     unique_orders = {}
     for order in app.config["ORDERS_CACHE"]:
@@ -850,8 +852,19 @@ def ordini_preparazione():
                 for reparto in reparti_ordine
             )
             
+            # Filtro per reparto specifico (solo per cassiere)
+            show_order = True
+            if reparto_filter != 'tutti':
+                # Controlla se l'ordine ha articoli del reparto filtrato
+                has_reparto_filter = False
+                for order_line in app.config.get("ORDERS_CACHE", []):
+                    if order_line.get("seriale") == order["seriale"] and order_line.get("codice_reparto") == reparto_filter:
+                        has_reparto_filter = True
+                        break
+                show_order = has_reparto_filter
+            
             # Mostra l'ordine se ha almeno un reparto in preparazione ma non tutti pronti
-            if has_in_preparazione and not all_pronti:
+            if has_in_preparazione and not all_pronti and show_order:
                 # Aggiungi informazioni di lettura
                 reads = OrderRead.query.filter_by(seriale=order["seriale"]).all()
                 order["read_by"] = [read.operatore for read in reads]
@@ -874,7 +887,72 @@ def ordini_preparazione():
         reverse=True
     )
     
-    return render_template("ordini_preparazione.html", orders=sorted_orders)
+    # Calcola contatori per reparto (solo per cassiere)
+    reparti_counters = {}
+    if not current_user.reparto:  # Solo per cassiere
+        from reparti import REPARTI
+        # Escludi REP06 (BOMBOLE) dai filtri
+        reparti_filtri = {k: v for k, v in REPARTI.items() if k != 'REP06'}
+        for reparto_code in reparti_filtri.keys():
+            reparti_counters[reparto_code] = 0
+        
+        # Conta ordini per ogni reparto
+        for order in app.config.get("ORDERS_CACHE", []):
+            seriale = order["seriale"]
+            reparto = order.get("codice_reparto")
+            if reparto in reparti_counters:
+                # Controlla se questo ordine è in preparazione per questo reparto
+                status_by_reparto = get_ordine_status_by_reparto(seriale)
+                if status_by_reparto.get(reparto, {}).get('status') == 'in_preparazione':
+                    reparti_counters[reparto] += 1
+        
+        # Se c'è un filtro specifico, conta solo gli ordini di quel reparto
+        if reparto_filter != 'tutti' and reparto_filter in reparti_counters:
+            # Conta solo gli ordini del reparto selezionato
+            selected_count = 0
+            for order in app.config.get("ORDERS_CACHE", []):
+                seriale = order["seriale"]
+                if order.get("codice_reparto") == reparto_filter:
+                    status_by_reparto = get_ordine_status_by_reparto(seriale)
+                    if status_by_reparto.get(reparto_filter, {}).get('status') == 'in_preparazione':
+                        selected_count += 1
+            reparti_counters['selected_count'] = selected_count
+    
+    # Calcola il totale generale di ordini in preparazione (prima del filtro per reparto)
+    # Ricalcola tutti gli ordini in preparazione senza filtro reparto
+    all_orders_in_preparation = []
+    for order in unique_orders.values():
+        if current_user.reparto:
+            # Per i picker: mostra solo ordini con status 'in_preparazione' del loro reparto
+            status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
+            my_reparto_status = status_by_reparto.get(current_user.reparto, {})
+            if my_reparto_status.get('status') == 'in_preparazione':
+                all_orders_in_preparation.append(order)
+        else:
+            # Per i cassiere: mostra ordini che hanno almeno un reparto in preparazione
+            status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
+            reparti_ordine = get_ordine_reparti(order["seriale"])
+            
+            has_in_preparazione = any(
+                status_by_reparto.get(reparto, {}).get('status') == 'in_preparazione'
+                for reparto in reparti_ordine
+            )
+            
+            all_pronti = all(
+                status_by_reparto.get(reparto, {}).get('status') == 'pronto'
+                for reparto in reparti_ordine
+            )
+            
+            if has_in_preparazione and not all_pronti:
+                all_orders_in_preparation.append(order)
+    
+    total_orders_in_preparation = len(all_orders_in_preparation)
+    
+    return render_template("ordini_preparazione.html", 
+                         orders=sorted_orders, 
+                         reparto_filter=reparto_filter,
+                         reparti_counters=reparti_counters,
+                         total_orders_in_preparation=total_orders_in_preparation)
 
 
 @app.route("/ordini/preparati")
