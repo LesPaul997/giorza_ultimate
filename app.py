@@ -685,6 +685,65 @@ def home():
     return render_template("home.html", role=current_user.role, counters=counters)
 
 
+@app.route("/api/orders/search")
+@login_required
+def api_orders_search():
+    """Endpoint per ricerca ordini - cerca in TUTTI gli ordini, non solo quelli caricati"""
+    search_term = request.args.get('q', '').strip()
+    
+    if not search_term:
+        return jsonify({"orders": [], "total": 0})
+    
+    # Raggruppa per seriale per evitare duplicati
+    unique_orders = {}
+    for order in app.config["ORDERS_CACHE"]:
+        seriale = order["seriale"]
+        if seriale not in unique_orders:
+            unique_orders[seriale] = order
+    
+    # Filtra ordini in base al reparto dell'utente
+    if current_user.reparto:
+        # Per i picker, filtra solo gli ordini del loro reparto
+        ordini_con_articoli_reparto = set()
+        for order in app.config["ORDERS_CACHE"]:
+            if order.get("codice_reparto") == current_user.reparto:
+                ordini_con_articoli_reparto.add(order["seriale"])
+        
+        filtered_orders = {}
+        for seriale, order in unique_orders.items():
+            if seriale in ordini_con_articoli_reparto:
+                filtered_orders[seriale] = order
+        
+        unique_orders = filtered_orders
+    
+    # Applica il filtro di ricerca
+    search_term_lower = search_term.lower()
+    filtered_orders = []
+    
+    for order in unique_orders.values():
+        # Cerca in tutti i campi rilevanti
+        if (search_term_lower in str(order.get("numero_ordine", "")).lower() or
+            search_term_lower in str(order.get("nome_cliente", "")).lower() or
+            search_term_lower in str(order.get("seriale", "")).lower() or
+            search_term_lower in str(order.get("codice_articolo", "")).lower() or
+            search_term_lower in str(order.get("descrizione_articolo", "")).lower() or
+            search_term_lower in str(order.get("descrizione_supplementare", "")).lower()):
+            filtered_orders.append(order)
+    
+    # Ordina per numero ordine (maggiore prima)
+    sorted_orders = sorted(
+        filtered_orders, 
+        key=lambda x: int(x["numero_ordine"]) if x["numero_ordine"] and str(x["numero_ordine"]).isdigit() else 0, 
+        reverse=True
+    )
+    
+    return jsonify({
+        "orders": sorted_orders,
+        "total": len(sorted_orders),
+        "search_term": search_term
+    })
+
+
 @app.route("/api/orders")
 @login_required
 def api_orders():

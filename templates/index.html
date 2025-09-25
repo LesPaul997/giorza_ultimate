@@ -18,8 +18,13 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                 </svg>
             </div>
-            <input type="text" id="searchInput" placeholder="Cerca ordini, clienti, articoli..."
+            <input type="text" id="searchInput" placeholder="Cerca in TUTTI gli ordini, clienti, articoli..."
                    class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        
+        <!-- Search Status -->
+        <div id="searchStatus" class="mt-2 text-sm text-gray-600 hidden">
+            <span id="searchStatusText">Cercando...</span>
         </div>
         
         <!-- Test Notification Button -->
@@ -138,6 +143,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const notificationSound = document.getElementById('notificationSound');
     const strongNotificationSound = document.getElementById('strongNotificationSound');
     const notificationOverlay = document.getElementById('notificationOverlay');
+    const searchStatus = document.getElementById('searchStatus');
+    const searchStatusText = document.getElementById('searchStatusText');
     
     let currentOrders = [];
     let lastOrderCount = 0;
@@ -486,10 +493,62 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Search functionality
+    // Search functionality - cerca in TUTTI gli ordini
+    let searchTimeout;
     searchInput.addEventListener('input', function() {
-        const filteredOrders = filterOrders(currentOrders, this.value);
-        displayOrders(filteredOrders);
+        const searchTerm = this.value.trim();
+        
+        // Debounce: aspetta 300ms dopo l'ultima digitazione
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async () => {
+            if (searchTerm.length === 0) {
+                // Se la ricerca è vuota, mostra gli ordini caricati normalmente
+                displayOrders(currentOrders);
+                searchStatus.classList.add('hidden');
+                return;
+            }
+            
+            if (searchTerm.length < 2) {
+                // Troppo corto per cercare
+                return;
+            }
+            
+            try {
+                // Mostra status di ricerca
+                searchStatus.classList.remove('hidden');
+                searchStatusText.textContent = `Cercando "${searchTerm}" in tutti gli ordini...`;
+                
+                // Cerca in TUTTI gli ordini tramite API
+                const response = await fetch(`/api/orders/search?q=${encodeURIComponent(searchTerm)}`, {
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                
+                // Mostra i risultati della ricerca
+                displayOrders(data.orders);
+                
+                // Aggiorna lo status
+                if (data.total > 0) {
+                    searchStatusText.textContent = `Trovati ${data.total} ordini per "${searchTerm}"`;
+                    searchStatus.classList.remove('text-gray-600');
+                    searchStatus.classList.add('text-green-600');
+                } else {
+                    searchStatusText.textContent = `Nessun ordine trovato per "${searchTerm}"`;
+                    searchStatus.classList.remove('text-gray-600');
+                    searchStatus.classList.add('text-red-600');
+                }
+                
+            } catch (error) {
+                console.error('Errore nella ricerca:', error);
+                searchStatusText.textContent = `Errore nella ricerca: ${error.message}`;
+                searchStatus.classList.remove('text-gray-600');
+                searchStatus.classList.add('text-red-600');
+                
+                // Fallback: cerca negli ordini caricati
+                const filteredOrders = filterOrders(currentOrders, searchTerm);
+                displayOrders(filteredOrders);
+            }
+        }, 300);
     });
 
     // Test notification button
