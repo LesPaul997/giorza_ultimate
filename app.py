@@ -906,6 +906,24 @@ def ordini_preparazione():
             if order_line.get("codice_reparto") == reparto_filter:
                 filtered_seriali.add(order_line.get("seriale"))
     
+    # OTTIMIZZAZIONE: Query batch per ordini in preparazione
+    all_seriali = list(unique_orders.keys())
+    
+    # Carica tutti gli stati per reparto in una sola query
+    reparto_statuses = {}
+    if all_seriali:
+        reparto_records = OrderStatusByReparto.query.filter(
+            OrderStatusByReparto.seriale.in_(all_seriali)
+        ).all()
+        for record in reparto_records:
+            if record.seriale not in reparto_statuses:
+                reparto_statuses[record.seriale] = {}
+            reparto_statuses[record.seriale][record.reparto] = {
+                'status': record.status,
+                'operatore': record.operatore,
+                'timestamp': record.timestamp
+            }
+    
     # VERSIONE SEMPLIFICATA: Solo query database essenziali
     orders_with_status = []
     
@@ -917,7 +935,7 @@ def ordini_preparazione():
         
         if current_user.reparto:
             # Per i picker: controllo semplificato dello stato
-            status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
+            status_by_reparto = reparto_statuses.get(order["seriale"], {})
             my_reparto_status = status_by_reparto.get(current_user.reparto, {})
             if my_reparto_status.get('status') == 'in_preparazione':
                 # RIMUOVO query OrderRead per alleggerire
@@ -926,7 +944,7 @@ def ordini_preparazione():
                 orders_with_status.append(order)
         else:
             # Per i cassiere: controllo semplificato
-            status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
+            status_by_reparto = reparto_statuses.get(order["seriale"], {})
             reparti_ordine = get_ordine_reparti(order["seriale"])
             
             # Controlli semplificati
