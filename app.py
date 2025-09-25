@@ -1876,8 +1876,16 @@ def ordini_da_completare():
     markers_to_remove = []
     for marker in list(residues):
         try:
-            seriale = marker.seriale
-            reparto = marker.reparto
+            # Salva i valori PRIMA di accedere all'oggetto per evitare ObjectDeletedError
+            try:
+                seriale = marker.seriale
+                reparto = marker.reparto
+                marker_id = getattr(marker, 'id', 'unknown')
+            except Exception as attr_error:
+                print(f"⚠️ Errore accesso attributi marker: {attr_error}")
+                markers_to_remove.append(marker)
+                continue
+            
             righe_seriale = [o for o in app.config.get("ORDERS_CACHE", []) if o.get("seriale") == seriale]
             if reparto:
                 righe_seriale = [o for o in righe_seriale if o.get("codice_reparto") == reparto]
@@ -1892,7 +1900,7 @@ def ordini_da_completare():
                 except Exception:
                     db.session.rollback()
         except Exception as e:
-            print(f"⚠️ Errore nel cleanup marker {marker.id if hasattr(marker, 'id') else 'unknown'}: {e}")
+            print(f"⚠️ Errore nel cleanup marker {marker_id}: {e}")
             # Rimuovi il marker problematico dalla lista
             markers_to_remove.append(marker)
             continue
