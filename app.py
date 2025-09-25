@@ -1675,9 +1675,22 @@ def update_order_status(seriale: str):
             )
             db.session.add(new_status)
         
-        # Aggiorna anche lo stato generale dell'ordine se tutti i reparti sono pronti
+        # OTTIMIZZAZIONE: Query batch per stati reparto
         reparti_ordine = get_ordine_reparti(seriale)
-        status_by_reparto = get_ordine_status_by_reparto(seriale)
+        
+        # Carica tutti gli stati per reparto in una sola query
+        status_by_reparto = {}
+        if reparti_ordine:
+            reparto_records = OrderStatusByReparto.query.filter(
+                OrderStatusByReparto.seriale == seriale,
+                OrderStatusByReparto.reparto.in_(reparti_ordine)
+            ).all()
+            for record in reparto_records:
+                status_by_reparto[record.reparto] = {
+                    'status': record.status,
+                    'operatore': record.operatore,
+                    'timestamp': record.timestamp
+                }
         
         # Controlla se tutti i reparti sono pronti
         tutti_pronti = all(
@@ -1714,17 +1727,11 @@ def update_order_status(seriale: str):
         if tutti_pronti:
             print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")
         
-        # Invalida la cache per forzare il refresh dell'interfaccia
+        # OTTIMIZZAZIONE: Cache refresh mirato invece di refresh completo
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
             # Marca la cache come modificata per forzare il refresh
             app.config['CACHE_MODIFIED'] = True
-            # Forza il refresh immediato della cache
-            try:
-                from app import refresh_orders
-                refresh_orders()
-                print(f"🔄 Cache forzata al refresh per ordine {seriale}")
-            except Exception as e:
-                print(f"⚠️ Errore nel refresh cache: {e}")
+            print(f"🔄 Cache marcata come modificata per ordine {seriale}")
 
         # Se il reparto imposta PRONTO, calcola e salva i residui parziali per quel reparto
         if status == 'pronto':
