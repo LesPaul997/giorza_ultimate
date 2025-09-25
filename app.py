@@ -1501,31 +1501,40 @@ def print_order(seriale: str):
 def propose_confirm(seriale: str):
     if current_user.role != "picker":
         abort(403)
-    edit = OrderEdit(
-        seriale=seriale,
-        articolo=request.form["articolo"],
-        quantita_nuova=float(request.form["quantita"]),
-        unita_misura=request.form["unita"],
-        operatore=current_user.username,
-        applied=True,
-    )
-    db.session.add(edit)
     
-    # Auto-start preparation quando un picker interagisce con l'ordine
-    if current_user.role == "picker" and current_user.reparto:
-        auto_start_preparation(seriale, current_user.username, current_user.reparto)
-    
-    db.session.commit()
-    
-    # Invalida la cache per forzare il refresh dell'interfaccia
-    if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
-        app.config['CACHE_MODIFIED'] = True
-        print(f"✅ Quantità confermata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
-    
-    back = request.form.get("back")
-    if back:
-        return redirect(url_for("order_detail", seriale=seriale, back=back))
-    return redirect(url_for("order_detail", seriale=seriale))
+    # OTTIMIZZAZIONE: Crea edit e auto-start in un'unica transazione
+    try:
+        edit = OrderEdit(
+            seriale=seriale,
+            articolo=request.form["articolo"],
+            quantita_nuova=float(request.form["quantita"]),
+            unita_misura=request.form["unita"],
+            operatore=current_user.username,
+            applied=True,
+        )
+        db.session.add(edit)
+        
+        # Auto-start preparation quando un picker interagisce con l'ordine
+        if current_user.role == "picker" and current_user.reparto:
+            auto_start_preparation(seriale, current_user.username, current_user.reparto)
+        
+        # OTTIMIZZAZIONE: Un solo commit per tutto
+        db.session.commit()
+        
+        # Invalida la cache per forzare il refresh dell'interfaccia
+        if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
+            app.config['CACHE_MODIFIED'] = True
+            print(f"✅ Quantità confermata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
+        
+        back = request.form.get("back")
+        if back:
+            return redirect(url_for("order_detail", seriale=seriale, back=back))
+        return redirect(url_for("order_detail", seriale=seriale))
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Errore in propose_confirm: {e}")
+        return redirect(url_for("order_detail", seriale=seriale))
 
 
 @app.route("/ordine/<seriale>/edit", methods=["POST"])
@@ -1533,31 +1542,40 @@ def propose_confirm(seriale: str):
 def propose_edit(seriale: str):
     if current_user.role != "picker":
         abort(403)
-    edit = OrderEdit(
-        seriale=seriale,
-        articolo=request.form["articolo"],
-        quantita_nuova=float(request.form["quantita_nuova"]),
-        unita_misura=request.form["unita_misura"],
-        operatore=current_user.username,
-        applied=True,
-    )
-    db.session.add(edit)
     
-    # Auto-start preparation quando un picker interagisce con l'ordine
-    if current_user.role == "picker" and current_user.reparto:
-        auto_start_preparation(seriale, current_user.username, current_user.reparto)
-    
-    db.session.commit()
-    
-    # Invalida la cache per forzare il refresh dell'interfaccia
-    if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
-        app.config['CACHE_MODIFIED'] = True
-        print(f"✅ Quantità modificata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
-    
-    back = request.form.get("back")
-    if back:
-        return redirect(url_for("order_detail", seriale=seriale, back=back))
-    return redirect(url_for("order_detail", seriale=seriale))
+    # OTTIMIZZAZIONE: Crea edit e auto-start in un'unica transazione
+    try:
+        edit = OrderEdit(
+            seriale=seriale,
+            articolo=request.form["articolo"],
+            quantita_nuova=float(request.form["quantita_nuova"]),
+            unita_misura=request.form["unita_misura"],
+            operatore=current_user.username,
+            applied=True,
+        )
+        db.session.add(edit)
+        
+        # Auto-start preparation quando un picker interagisce con l'ordine
+        if current_user.role == "picker" and current_user.reparto:
+            auto_start_preparation(seriale, current_user.username, current_user.reparto)
+        
+        # OTTIMIZZAZIONE: Un solo commit per tutto
+        db.session.commit()
+        
+        # Invalida la cache per forzare il refresh dell'interfaccia
+        if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
+            app.config['CACHE_MODIFIED'] = True
+            print(f"✅ Quantità modificata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
+        
+        back = request.form.get("back")
+        if back:
+            return redirect(url_for("order_detail", seriale=seriale, back=back))
+        return redirect(url_for("order_detail", seriale=seriale))
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Errore in propose_edit: {e}")
+        return redirect(url_for("order_detail", seriale=seriale))
 
 
 # ---------- API FOR AUTO-PREPARATION --------------
@@ -1601,25 +1619,16 @@ def auto_start_preparation(seriale: str, operatore: str, reparto: str = None):
                 )
                 db.session.add(new_status)
             
-            # Aggiorna lo stato generale dell'ordine
+            # OTTIMIZZAZIONE: Aggiorna stato generale in modo semplificato
             general_status = OrderStatus.query.filter_by(seriale=seriale).first()
             if general_status:
-                # Controlla se tutti i reparti sono pronti
-                status_by_reparto = get_ordine_status_by_reparto(seriale)
-                reparti_ordine = get_ordine_reparti(seriale)
-                
-                tutti_pronti = all(
-                    status_by_reparto.get(reparto, {}).get('status') == 'pronto'
-                    for reparto in reparti_ordine
-                )
-                
-                if tutti_pronti:
-                    general_status.status = 'pronto'
-                else:
+                # Se non è già pronto, metti in preparazione
+                if general_status.status != 'pronto':
                     general_status.status = 'in_preparazione'
-                general_status.operatore = operatore
-                general_status.timestamp = db.func.now()
+                    general_status.operatore = operatore
+                    general_status.timestamp = db.func.now()
             else:
+                # Crea nuovo stato generale
                 new_general_status = OrderStatus(
                     seriale=seriale,
                     status='in_preparazione',
