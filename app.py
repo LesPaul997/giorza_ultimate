@@ -1028,22 +1028,48 @@ def ordini_preparati():
         
         unique_orders = filtered_orders
     
+    # OTTIMIZZAZIONE: Query batch per ordini preparati
+    all_seriali = list(unique_orders.keys())
+    
+    # 1. Carica tutti gli stati per reparto in una sola query
+    reparto_statuses = {}
+    if all_seriali:
+        reparto_records = OrderStatusByReparto.query.filter(
+            OrderStatusByReparto.seriale.in_(all_seriali)
+        ).all()
+        for record in reparto_records:
+            if record.seriale not in reparto_statuses:
+                reparto_statuses[record.seriale] = {}
+            reparto_statuses[record.seriale][record.reparto] = {
+                'status': record.status,
+                'operatore': record.operatore,
+                'timestamp': record.timestamp
+            }
+    
+    # 2. Carica tutte le informazioni di lettura in una sola query
+    read_statuses = {}
+    if all_seriali:
+        read_records = OrderRead.query.filter(OrderRead.seriale.in_(all_seriali)).all()
+        for read_record in read_records:
+            if read_record.seriale not in read_statuses:
+                read_statuses[read_record.seriale] = []
+            read_statuses[read_record.seriale].append(read_record.operatore)
+    
     # Filtra ordini in base al ruolo dell'utente
     orders_with_status = []
     for order in unique_orders.values():
         if current_user.reparto:
             # Per i picker: mostra solo ordini con status 'pronto' del loro reparto
-            status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
+            status_by_reparto = reparto_statuses.get(order["seriale"], {})
             my_reparto_status = status_by_reparto.get(current_user.reparto, {})
             if my_reparto_status.get('status') == 'pronto':
                 # Aggiungi informazioni di lettura
-                reads = OrderRead.query.filter_by(seriale=order["seriale"]).all()
-                order["read_by"] = [read.operatore for read in reads]
+                order["read_by"] = read_statuses.get(order["seriale"], [])
                 order["status"] = my_reparto_status
                 orders_with_status.append(order)
         else:
             # Per i cassiere: mostra solo ordini dove TUTTI i reparti sono pronti
-            status_by_reparto = get_ordine_status_by_reparto(order["seriale"])
+            status_by_reparto = reparto_statuses.get(order["seriale"], {})
             reparti_ordine = get_ordine_reparti(order["seriale"])
             
             # Controlla se tutti i reparti sono pronti
@@ -1055,8 +1081,7 @@ def ordini_preparati():
             # Mostra l'ordine solo se tutti i reparti sono pronti
             if all_pronti:
                 # Aggiungi informazioni di lettura
-                reads = OrderRead.query.filter_by(seriale=order["seriale"]).all()
-                order["read_by"] = [read.operatore for read in reads]
+                order["read_by"] = read_statuses.get(order["seriale"], [])
                 order["status_by_reparto"] = status_by_reparto
                 order["reparti_ordine"] = reparti_ordine
                 
