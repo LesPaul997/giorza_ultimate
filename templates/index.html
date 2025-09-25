@@ -85,6 +85,15 @@
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p class="mt-2 text-sm text-gray-500">Caricamento ordini...</p>
         </div>
+        
+        <!-- Infinite Scroll Trigger -->
+        <div id="loadTrigger" class="h-4 flex items-center justify-center">
+            <div id="loadingIndicator" class="hidden">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <p class="mt-2 text-sm text-gray-500">Caricamento...</p>
+            </div>
+        </div>
+        
     </div>
 </div>
 
@@ -356,26 +365,48 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 6000);
     }
 
-    async function loadOrders() {
+    // Variabili per la paginazione
+    let currentPage = 1;
+    let hasMore = true;
+    let allOrders = [];
+    
+    async function loadOrders(page = 1, append = false) {
         try {
-            const response = await fetch('/api/orders', {
+            const response = await fetch(`/api/orders?page=${page}`, {
                 credentials: 'same-origin'
             });
-            const orders = await response.json();
+            const data = await response.json();
             
-            currentOrders = orders;
-            const filteredOrders = filterOrders(orders, searchInput.value);
+            if (page === 1) {
+                // Prima pagina - sostituisci tutto
+                allOrders = data.orders;
+                currentOrders = data.orders;
+            } else {
+                // Pagine successive - aggiungi
+                allOrders = [...allOrders, ...data.orders];
+                currentOrders = allOrders;
+            }
+            
+            hasMore = data.has_more;
+            currentPage = page;
+            
+            const filteredOrders = filterOrders(currentOrders, searchInput.value);
             displayOrders(filteredOrders);
             
             // Update last update time
             lastUpdate.textContent = new Date().toLocaleTimeString('it-IT');
             
             // Pulisci gli ordini letti dal tracking delle notifiche
-            orders.forEach(order => {
+            data.orders.forEach(order => {
                 if (order.status && order.status !== 'nuovo') {
                     notifiedOrders.delete(order.seriale);
                 }
             });
+            
+            
+            // Nascondi l'indicatore di caricamento
+            hideLoadingIndicator();
+            isLoading = false;
             
             // Check for new orders and play sound
             const currentOrderSeriali = new Set(orders.map(order => order.seriale));
@@ -462,6 +493,8 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error loading orders:', error);
             loadingState.classList.add('hidden');
             emptyState.classList.remove('hidden');
+            hideLoadingIndicator();
+            isLoading = false;
         }
     }
 
@@ -501,13 +534,50 @@ document.addEventListener('DOMContentLoaded', function() {
     // Auto-refresh every 30 seconds
     setInterval(() => {
         if (isPolling) {
-            loadOrders();
+            loadOrders(1); // Ricarica sempre dalla prima pagina
         }
     }, 30000);
 
     // Sistema di notifiche modifiche rimosso
 
     // Controllo modifiche disabilitato
+    
+    // Funzioni per l'infinite scroll
+    
+    function showLoadingIndicator() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        loadingIndicator.classList.remove('hidden');
+    }
+    
+    function hideLoadingIndicator() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        loadingIndicator.classList.add('hidden');
+    }
+    
+    function loadMoreOrders() {
+        if (hasMore && !isLoading) {
+            isLoading = true;
+            showLoadingIndicator();
+            loadOrders(currentPage + 1, true);
+        }
+    }
+    
+    // Intersection Observer per l'infinite scroll
+    let isLoading = false;
+    const loadTrigger = document.getElementById('loadTrigger');
+    
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+            loadMoreOrders();
+        }
+    }, { 
+        threshold: 0.1,
+        rootMargin: '100px' // Trigger 100px prima di arrivare al trigger
+    });
+    
+    if (loadTrigger) {
+        observer.observe(loadTrigger);
+    }
 
     // Pause polling when page is not visible
     document.addEventListener('visibilitychange', function() {

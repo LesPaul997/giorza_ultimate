@@ -730,7 +730,24 @@ def api_orders():
         key=lambda x: int(x["numero_ordine"]) if x["numero_ordine"] and str(x["numero_ordine"]).isdigit() else 0, 
         reverse=True
     )
-    return jsonify(sorted_orders)
+    
+    # Parametri di paginazione
+    page = request.args.get('page', 1, type=int)
+    limit = 10
+    
+    # Applica paginazione
+    total_orders = len(sorted_orders)
+    offset = (page - 1) * limit
+    paginated_orders = sorted_orders[offset:offset + limit]
+    has_more = offset + limit < total_orders
+    
+    return jsonify({
+        "orders": paginated_orders,
+        "has_more": has_more,
+        "current_page": page,
+        "total_orders": total_orders,
+        "total_pages": (total_orders + limit - 1) // limit
+    })
 
 
 @app.route("/api/refresh")
