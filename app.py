@@ -609,16 +609,34 @@ def home():
     pronti = 0
     nuovi = 0
     
+    # OTTIMIZZAZIONE: Query batch per la home
+    all_seriali = list(unique_orders.keys())
+    
+    # Carica tutti gli stati per reparto in una sola query
+    reparto_statuses = {}
+    if all_seriali:
+        reparto_records = OrderStatusByReparto.query.filter(
+            OrderStatusByReparto.seriale.in_(all_seriali)
+        ).all()
+        for record in reparto_records:
+            if record.seriale not in reparto_statuses:
+                reparto_statuses[record.seriale] = {}
+            reparto_statuses[record.seriale][record.reparto] = {
+                'status': record.status,
+                'operatore': record.operatore,
+                'timestamp': record.timestamp
+            }
+    
     for seriale, order in unique_orders.items():
         if current_user.reparto:
             # Per i picker, controlla lo stato del loro reparto
-            status_by_reparto = get_ordine_status_by_reparto(seriale)
+            status_by_reparto = reparto_statuses.get(seriale, {})
             my_reparto_status = status_by_reparto.get(current_user.reparto, {})
             status = my_reparto_status.get('status', 'nuovo')
         else:
             # Per i cassiere, controlla lo stato generale dell'ordine
             # basato sullo stato di tutti i reparti coinvolti
-            status_by_reparto = get_ordine_status_by_reparto(seriale)
+            status_by_reparto = reparto_statuses.get(seriale, {})
             reparti_ordine = get_ordine_reparti(seriale)
             
             if not reparti_ordine:
@@ -693,14 +711,42 @@ def api_orders():
         
         unique_orders = filtered_orders
     
-    # Aggiungi lo stato per ogni ordine
+    # OTTIMIZZAZIONE: Query batch invece di query individuali
+    all_seriali = list(unique_orders.keys())
+    
+    # 1. Carica tutti gli stati generali in una sola query
+    general_statuses = {}
+    if all_seriali:
+        status_records = OrderStatus.query.filter(OrderStatus.seriale.in_(all_seriali)).all()
+        for status_record in status_records:
+            general_statuses[status_record.seriale] = {
+                'status': status_record.status,
+                'operatore': status_record.operatore,
+                'timestamp': status_record.timestamp.isoformat() if status_record.timestamp else None
+            }
+    
+    # 2. Carica tutti gli stati per reparto in una sola query
+    reparto_statuses = {}
+    if all_seriali:
+        reparto_records = OrderStatusByReparto.query.filter(
+            OrderStatusByReparto.seriale.in_(all_seriali)
+        ).all()
+        for record in reparto_records:
+            if record.seriale not in reparto_statuses:
+                reparto_statuses[record.seriale] = {}
+            reparto_statuses[record.seriale][record.reparto] = {
+                'status': record.status,
+                'operatore': record.operatore,
+                'timestamp': record.timestamp
+            }
+    
+    # 3. Applica gli stati agli ordini
     for seriale, order in unique_orders.items():
         # Stato generale dell'ordine
-        status_record = OrderStatus.query.filter_by(seriale=seriale).first()
-        if status_record:
-            order["status"] = status_record.status
-            order["status_operatore"] = status_record.operatore
-            order["status_timestamp"] = status_record.timestamp.isoformat() if status_record.timestamp else None
+        if seriale in general_statuses:
+            order["status"] = general_statuses[seriale]['status']
+            order["status_operatore"] = general_statuses[seriale]['operatore']
+            order["status_timestamp"] = general_statuses[seriale]['timestamp']
         else:
             order["status"] = "nuovo"
             order["status_operatore"] = None
@@ -708,7 +754,19 @@ def api_orders():
         
         # Stato per reparto (solo per cassiere o se l'utente ha un reparto)
         if current_user.role in ["cassiere", "cassa"] or current_user.reparto:
-            status_by_reparto = get_ordine_status_by_reparto(seriale)
+            # Usa i dati precaricati invece di chiamare get_ordine_status_by_reparto
+            status_by_reparto = reparto_statuses.get(seriale, {})
+            
+            # Aggiungi stati 'nuovo' per reparti mancanti
+            reparti_ordine = get_ordine_reparti(seriale)
+            for reparto in reparti_ordine:
+                if reparto not in status_by_reparto:
+                    status_by_reparto[reparto] = {
+                        'status': 'nuovo',
+                        'operatore': None,
+                        'timestamp': None
+                    }
+            
             order["status_by_reparto"] = status_by_reparto
             
             # Per i picker, aggiungi solo lo stato del loro reparto
@@ -716,7 +774,6 @@ def api_orders():
                 order["my_reparto_status"] = status_by_reparto.get(current_user.reparto, {})
             else:
                 # Per i cassiere, aggiungi un riassunto dello stato
-                reparti_ordine = get_ordine_reparti(seriale)
                 status_summary = []
                 for reparto in reparti_ordine:
                     reparto_status = status_by_reparto.get(reparto, {})
