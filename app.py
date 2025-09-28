@@ -174,6 +174,7 @@ def refresh_orders() -> None:
                                         quantita_convertita = None
                                     
                                     if quantita_convertita is not None:
+                                        # CORREZIONE: Aggiungi come seconda unità, NON sostituire la prima
                                         order["quantita_um2"] = round(quantita_convertita, 3)
                                         order["operatore_conversione"] = articolo.operatore_conversione
                                         order["fattore_conversione"] = articolo.fattore_conversione
@@ -260,6 +261,7 @@ def refresh_orders_incremental() -> None:
                                         quantita_convertita = None
                                     
                                     if quantita_convertita is not None:
+                                        # CORREZIONE: Aggiungi come seconda unità, NON sostituire la prima
                                         order["quantita_um2"] = round(quantita_convertita, 3)
                                         order["operatore_conversione"] = articolo.operatore_conversione
                                         order["fattore_conversione"] = articolo.fattore_conversione
@@ -1909,7 +1911,9 @@ def ordini_da_completare():
                 righe_seriale = [o for o in righe_seriale if o.get("codice_reparto") == reparto]
             if not righe_seriale:
                 continue
-            tutte_evase = all(str(o.get("evasa_flag") or '').upper() == 'S' for o in righe_seriale)
+            
+            # RIMOSSO: Controllo flag evasione (non più necessario)
+            tutte_evase = False  # Sempre False per evitare auto-rimozione
             if tutte_evase:
                 try:
                     PartialOrderResidue.query.filter_by(seriale=seriale, reparto=reparto).delete()

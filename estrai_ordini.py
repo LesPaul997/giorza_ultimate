@@ -64,8 +64,8 @@ SELECT
     D.MVQTAMOV                                AS quantita,
     D.MVUNIMIS                                AS unita_misura,
     D.MVPREZZO                                AS prezzo_unitario,
-    FORMAT(D.MVDATEVA, 'dd/MM/yyyy')          AS data_evasione,
-    D.MVFLEVAS                                AS evasa_flag
+    FORMAT(D.MVDATEVA, 'dd/MM/yyyy')          AS data_evasione
+    -- RIMOSSO: D.MVFLEVAS AS evasa_flag (non più necessario)
 FROM ZARREDOC_MAST M
 JOIN ZARREDOC_DETT D ON D.MVSERIAL = M.MVSERIAL
 LEFT JOIN ZARRECONTI C ON C.ANCODICE = COALESCE(
