@@ -1525,6 +1525,14 @@ def propose_confirm(seriale: str):
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
             app.config['CACHE_MODIFIED'] = True
             print(f"✅ Quantità confermata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
+            
+            # OTTIMIZZAZIONE: Forza refresh immediato della cache per le modifiche
+            try:
+                from app import refresh_orders
+                refresh_orders()
+                print(f"🔄 Cache forzata al refresh per modifiche ordine {seriale}")
+            except Exception as e:
+                print(f"⚠️ Errore nel refresh cache: {e}")
         
         back = request.form.get("back")
         if back:
@@ -1566,6 +1574,14 @@ def propose_edit(seriale: str):
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
             app.config['CACHE_MODIFIED'] = True
             print(f"✅ Quantità modificata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
+            
+            # OTTIMIZZAZIONE: Forza refresh immediato della cache per le modifiche
+            try:
+                from app import refresh_orders
+                refresh_orders()
+                print(f"🔄 Cache forzata al refresh per modifiche ordine {seriale}")
+            except Exception as e:
+                print(f"⚠️ Errore nel refresh cache: {e}")
         
         back = request.form.get("back")
         if back:
