@@ -386,8 +386,14 @@ document.addEventListener('DOMContentLoaded', function() {
             hasMore = data.has_more;
             currentPage = page;
             
-            const filteredOrders = filterOrders(currentOrders, searchInput.value);
-            displayOrders(filteredOrders);
+            // Solo se non stiamo cercando, applica il filtro locale
+            if (!isSearching) {
+                const filteredOrders = filterOrders(currentOrders, searchInput.value);
+                displayOrders(filteredOrders);
+            } else {
+                // Durante la ricerca, mostra gli ordini così come sono
+                displayOrders(currentOrders);
+            }
             
             // Update last update time
             lastUpdate.textContent = new Date().toLocaleTimeString('it-IT');
@@ -495,6 +501,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Search functionality - cerca in TUTTI gli ordini
     let searchTimeout;
+    let isSearching = false; // Flag per gestire lo stato di ricerca
+    
     searchInput.addEventListener('input', function() {
         const searchTerm = this.value.trim();
         
@@ -502,7 +510,8 @@ document.addEventListener('DOMContentLoaded', function() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(async () => {
             if (searchTerm.length === 0) {
-                // Se la ricerca è vuota, mostra gli ordini caricati normalmente
+                // Se la ricerca è vuota, torna alla visualizzazione normale
+                isSearching = false;
                 displayOrders(currentOrders);
                 searchStatus.classList.add('hidden');
                 return;
@@ -514,6 +523,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             try {
+                // Imposta flag di ricerca
+                isSearching = true;
+                
                 // Mostra status di ricerca
                 searchStatus.classList.remove('hidden');
                 searchStatusText.textContent = `Cercando "${searchTerm}" in tutti gli ordini...`;
@@ -524,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 const data = await response.json();
                 
-                // Mostra i risultati della ricerca
+                // Mostra i risultati della ricerca SENZA applicare filterOrders
                 displayOrders(data.orders);
                 
                 // Aggiorna lo status
@@ -578,9 +590,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial load
     loadOrders();
 
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 30 seconds - ma non durante la ricerca
     setInterval(() => {
-        if (isPolling) {
+        if (isPolling && !isSearching) {
             loadOrders(1); // Ricarica sempre dalla prima pagina
         }
     }, 30000);
@@ -601,20 +613,29 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingIndicator.classList.add('hidden');
     }
     
+    // Debouncing per loadMoreOrders
+    let loadMoreTimeout;
+    
     function loadMoreOrders() {
-        if (hasMore && !isLoading) {
-            isLoading = true;
-            showLoadingIndicator();
-            loadOrders(currentPage + 1, true);
+        if (hasMore && !isLoading && !isSearching) {
+            // Debounce: aspetta 100ms prima di caricare
+            clearTimeout(loadMoreTimeout);
+            loadMoreTimeout = setTimeout(() => {
+                if (hasMore && !isLoading && !isSearching) {
+                    isLoading = true;
+                    showLoadingIndicator();
+                    loadOrders(currentPage + 1, true);
+                }
+            }, 100);
         }
     }
     
-    // Intersection Observer per l'infinite scroll
+    // Intersection Observer per l'infinite scroll - migliorato
     let isLoading = false;
     const loadTrigger = document.getElementById('loadTrigger');
     
     const observer = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
+        if (entries[0].isIntersecting && hasMore && !isLoading && !isSearching) {
             loadMoreOrders();
         }
     }, { 
@@ -630,6 +651,26 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('visibilitychange', function() {
         isPolling = !document.hidden;
     });
+    
+    // Gestione touch per mobile/tablet
+    let touchStartY = 0;
+    let touchEndY = 0;
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    
+    document.addEventListener('touchend', function(e) {
+        touchEndY = e.changedTouches[0].clientY;
+        const touchDiff = touchStartY - touchEndY;
+        
+        // Se lo scroll è significativo e siamo in fondo alla pagina, carica più ordini
+        if (touchDiff > 50 && window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+            if (hasMore && !isLoading && !isSearching) {
+                loadMoreOrders();
+            }
+        }
+    }, { passive: true });
 });
 </script>
 {% endblock %}

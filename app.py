@@ -308,7 +308,7 @@ def refresh_orders_incremental() -> None:
     current_count = len(current_orders)
     new_count = len(new_orders)
     
-    print(f"📊 Ordini attuali: {current_count}, Ordini nel CSV: {new_count}")
+    # print(f"📊 Ordini attuali: {current_count}, Ordini nel CSV: {new_count}")  # Rimosso per ridurre log
     
     # Crea un dizionario per accesso rapido agli ordini attuali per seriale
     current_orders_by_serial = {}
@@ -466,8 +466,8 @@ def refresh_orders_incremental() -> None:
         
         app.config["ORDERS_CACHE"] = new_orders
     else:
-        print("✅ Nessuna modifica rilevata")
-
+        # print("✅ Nessuna modifica rilevata")  # Rimosso per ridurre log
+        pass
 
 def refresh_stock() -> None:
     """Aggiorna la cache del magazzino."""
@@ -1526,8 +1526,8 @@ def propose_confirm(seriale: str):
         # OTTIMIZZAZIONE: Solo flag cache, no refresh completo
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
             app.config['CACHE_MODIFIED'] = True
-            print(f"✅ Quantità confermata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
-            print(f"🔄 Cache marcata come modificata per ordine {seriale}")
+            # print(f"✅ Quantità confermata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")  # Rimosso per ridurre log
+            # print(f"🔄 Cache marcata come modificata per ordine {seriale}")  # Rimosso per ridurre log
         
         back = request.form.get("back")
         if back:
@@ -1568,8 +1568,8 @@ def propose_edit(seriale: str):
         # OTTIMIZZAZIONE: Solo flag cache, no refresh completo
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
             app.config['CACHE_MODIFIED'] = True
-            print(f"✅ Quantità modificata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")
-            print(f"🔄 Cache marcata come modificata per ordine {seriale}")
+            # print(f"✅ Quantità modificata: {edit.quantita_nuova} {edit.unita_misura} per articolo {edit.articolo}")  # Rimosso per ridurre log
+            # print(f"🔄 Cache marcata come modificata per ordine {seriale}")  # Rimosso per ridurre log
         
         back = request.form.get("back")
         if back:
@@ -1641,7 +1641,7 @@ def auto_start_preparation(seriale: str, operatore: str, reparto: str = None):
                 db.session.add(new_general_status)
             
             db.session.commit()
-            print(f"✅ Auto-start preparation: Ordine {seriale} messo in preparazione per reparto {reparto}")
+            # print(f"✅ Auto-start preparation: Ordine {seriale} messo in preparazione per reparto {reparto}")  # Rimosso per ridurre log
             
     except Exception as e:
         print(f"❌ Errore in auto_start_preparation: {e}")
@@ -1727,7 +1727,7 @@ def update_order_status(seriale: str):
         db.session.commit()
         
         # Forza refresh della cache per aggiornare immediatamente l'interfaccia
-        print(f"✅ Stato aggiornato: Ordine {seriale} -> {status} per reparto {current_user.reparto}")
+        # print(f"✅ Stato aggiornato: Ordine {seriale} -> {status} per reparto {current_user.reparto}")  # Rimosso per ridurre log
         if tutti_pronti:
             print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")
         
@@ -1735,7 +1735,7 @@ def update_order_status(seriale: str):
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
             # Marca la cache come modificata per forzare il refresh
             app.config['CACHE_MODIFIED'] = True
-            print(f"🔄 Cache marcata come modificata per ordine {seriale}")
+            # print(f"🔄 Cache marcata come modificata per ordine {seriale}")  # Rimosso per ridurre log
 
         # Se il reparto imposta PRONTO, calcola e salva i residui parziali per quel reparto
         if status == 'pronto':

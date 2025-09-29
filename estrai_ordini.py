@@ -40,7 +40,7 @@ DEFAULT_CONNSTR = (
 CONN_STR = os.getenv("MSSQL_CONNSTRING_DEMO", DEFAULT_CONNSTR)
 # Data di partenza per import ordini (YYYY-MM-DD). Default: 2025-09-01
 ORDERS_FROM_DATE = os.getenv("ORDERS_FROM_DATE", "2025-09-01")
-print("Conn string:", CONN_STR)
+# print("Conn string:", CONN_STR)  # Rimosso per ridurre log
 
 # ------------------------------------------------------------------
 # 2) Query ordini (versione funzionante con DEMOCONTI)
@@ -123,7 +123,7 @@ def estrai_ordini() -> None:
         writer.writerow(headers)
         writer.writerows(processed_rows)
 
-    print(f"CSV generato: {CSV_PATH.relative_to(Path.cwd())}")
+    # print(f"CSV generato: {CSV_PATH.relative_to(Path.cwd())}")  # Rimosso per ridurre log
 
 
 def main() -> None:  # pragma: no cover

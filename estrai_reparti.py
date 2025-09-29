@@ -36,7 +36,7 @@ DEFAULT_CONNSTR = (
 )
 
 CONN_STR = os.getenv("MSSQL_CONNSTRING_DEMO", DEFAULT_CONNSTR)
-print("→ Conn string:", CONN_STR)
+# print("→ Conn string:", CONN_STR)  # Rimosso per ridurre log
 
 # ------------------------------------------------------------------
 # 2) Query reparti (solo campi necessari)
@@ -81,8 +81,8 @@ def estrai_reparti() -> None:
         writer.writerow(headers)
         writer.writerows(rows)
 
-    print(f"✅  CSV generato: {CSV_PATH.relative_to(Path.cwd())}")
-    print(f"📊 Articoli estratti: {len(rows)}")
+    # print(f"✅  CSV generato: {CSV_PATH.relative_to(Path.cwd())}")  # Rimosso per ridurre log
+    # print(f"📊 Articoli estratti: {len(rows)}")  # Rimosso per ridurre log
 
 
 def main() -> None:  # pragma: no cover
