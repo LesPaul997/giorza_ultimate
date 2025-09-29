@@ -432,7 +432,8 @@
                   <!-- Bottone Modifica -->
                   <button
                     onclick="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
-                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    ontouchstart="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 touch-friendly"
                     title="Modifica quantità e unità di misura"
                   >
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -444,7 +445,8 @@
                   <!-- Bottone Conferma -->
                       <button
                     onclick="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
-                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                    ontouchstart="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                    class="inline-flex items-center justify-center px-6 py-4 text-base font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 touch-friendly"
                     title="Conferma articolo preparato"
                       >
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -490,6 +492,7 @@
       <div class="md:hidden space-y-4">
         {% for l in lines %}
           {% set confirmed = l.codice_articolo in edited_articoli %}
+          {% set edit = edits|selectattr("articolo", "equalto", l.codice_articolo)|list|sort(attribute="timestamp")|last if confirmed else none %}
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 {{ 'border-l-4 border-l-green-400 bg-green-50' if confirmed else 'bg-gray-100' if l.removed else '' }} {{ 'opacity-50' if l.removed or l.unavailable else '' }}">
             
             <!-- Header con icona e info principali -->
@@ -561,7 +564,8 @@
                 
                 <!-- Bottone Modifica -->
                 <button onclick="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
-                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                        ontouchstart="openEditModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md touch-friendly">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                   </svg>
@@ -570,7 +574,8 @@
                 
                 <!-- Bottone Conferma -->
                 <button onclick="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
-                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md">
+                        ontouchstart="openConfirmModal('{{ l.codice_articolo }}', '{{ edit.quantita_nuova if confirmed and edit else l.quantita }}', '{{ edit.unita_misura if confirmed and edit else l.unita_misura }}')"
+                        class="inline-flex items-center justify-center px-3 py-3 text-sm font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm hover:shadow-md touch-friendly">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                   </svg>
