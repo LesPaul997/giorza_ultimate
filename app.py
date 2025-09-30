@@ -300,7 +300,7 @@ def refresh_orders_incremental() -> None:
     
     # Se la cache è vuota, carica tutto
     if not current_orders:
-        print("🔄 Cache vuota - Caricamento completo ordini")
+        # print("🔄 Cache vuota - Caricamento completo ordini")  # Rimosso per ridurre log
         app.config["ORDERS_CACHE"] = new_orders
         return
     
@@ -353,11 +353,11 @@ def refresh_orders_incremental() -> None:
             
             # Controlla se ci sono differenze nel contenuto
             if current_identifiers != new_identifiers:
-                print(f"🔄 Ordine {seriale} modificato: contenuto righe cambiato")
-                print(f"   Righe attuali: {len(current_identifiers)}")
-                print(f"   Righe nuove: {len(new_identifiers)}")
-                print(f"   Righe rimosse: {len(current_identifiers - new_identifiers)}")
-                print(f"   Righe aggiunte: {len(new_identifiers - current_identifiers)}")
+                # print(f"🔄 Ordine {seriale} modificato: contenuto righe cambiato")  # Rimosso per ridurre log
+                # print(f"   Righe attuali: {len(current_identifiers)}")  # Rimosso per ridurre log
+                # print(f"   Righe nuove: {len(new_identifiers)}")  # Rimosso per ridurre log
+                # print(f"   Righe rimosse: {len(current_identifiers - new_identifiers)}")  # Rimosso per ridurre log
+                # print(f"   Righe aggiunte: {len(new_identifiers - current_identifiers)}")  # Rimosso per ridurre log
                 orders_modified = True
                 modified_orders.add(seriale)
             elif current_lines != new_lines:
@@ -367,7 +367,7 @@ def refresh_orders_incremental() -> None:
     
     # Se ci sono modifiche agli ordini esistenti o ordini completamente nuovi, aggiorna tutto
     if orders_modified or new_count != current_count:
-        print("🔄 Rilevate modifiche - Aggiornamento completo cache ordini")
+        # print("🔄 Rilevate modifiche - Aggiornamento completo cache ordini")  # Rimosso per ridurre log
         
         # Salva le righe modificate/cancellate per la visualizzazione
         if orders_modified:
@@ -434,7 +434,7 @@ def refresh_orders_incremental() -> None:
                                             removed=True
                                         )
                                         db.session.add(modified_line)
-                                        print(f"💾 Salvata riga modificata: {seriale} - {riga.get('codice_articolo', '')}")
+                                        # print(f"💾 Salvata riga modificata: {seriale} - {riga.get('codice_articolo', '')}")  # Rimosso per ridurre log
                                 except Exception as e:
                                     print(f"❌ Errore nel salvare riga modificata: {e}")
                         
@@ -444,7 +444,7 @@ def refresh_orders_incremental() -> None:
                 # Commit delle modifiche al database
                 try:
                     db.session.commit()
-                    print(f"✅ Salvate {len([line for lines in modified_lines.values() for line in lines])} righe modificate nel database")
+                    # print(f"✅ Salvate {len([line for lines in modified_lines.values() for line in lines])} righe modificate nel database")  # Rimosso per ridurre log
                 except Exception as e:
                     print(f"❌ Errore nel commit delle righe modificate: {e}")
                     db.session.rollback()
@@ -1707,7 +1707,7 @@ def update_order_status(seriale: str):
         if general_status:
             if tutti_pronti:
                 general_status.status = 'pronto'
-                print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")
+                # print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")  # Rimosso per ridurre log
             elif status == 'in_preparazione':
                 general_status.status = 'in_preparazione'
             # rimosso: lo stato "materiale_non_disponibile" non viene più tracciato a livello ordine
@@ -1722,14 +1722,16 @@ def update_order_status(seriale: str):
             )
             db.session.add(new_general_status)
             if tutti_pronti:
-                print(f"🎉 Nuovo ordine {seriale} COMPLETAMENTE PRONTO!")
+                pass
+                # print(f"🎉 Nuovo ordine {seriale} COMPLETAMENTE PRONTO!")  # Rimosso per ridurre log
         
         db.session.commit()
         
         # Forza refresh della cache per aggiornare immediatamente l'interfaccia
         # print(f"✅ Stato aggiornato: Ordine {seriale} -> {status} per reparto {current_user.reparto}")  # Rimosso per ridurre log
         if tutti_pronti:
-            print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")
+            pass
+            # print(f"🎉 Ordine {seriale} COMPLETAMENTE PRONTO!")  # Rimosso per ridurre log
         
         # OTTIMIZZAZIONE: Cache refresh mirato invece di refresh completo
         if hasattr(app, 'config') and 'ORDERS_CACHE' in app.config:
