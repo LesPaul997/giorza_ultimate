@@ -81,8 +81,7 @@ def estrai_reparti() -> None:
         writer.writerow(headers)
         writer.writerows(rows)
 
-    # print(f"✅  CSV generato: {CSV_PATH.relative_to(Path.cwd())}")  # Rimosso per ridurre log
-    # print(f"📊 Articoli estratti: {len(rows)}")  # Rimosso per ridurre log
+    print(f"📊 CSV reparti generato: {CSV_PATH.relative_to(Path.cwd())} - {len(rows)} reparti estratti")
 
 
 def main() -> None:  # pragma: no cover

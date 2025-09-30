@@ -123,7 +123,7 @@ def estrai_ordini() -> None:
         writer.writerow(headers)
         writer.writerows(processed_rows)
 
-    # print(f"CSV generato: {CSV_PATH.relative_to(Path.cwd())}")  # Rimosso per ridurre log
+    print(f"📊 CSV generato: {CSV_PATH.relative_to(Path.cwd())} - {len(processed_rows)} ordini estratti")
 
 
 def main() -> None:  # pragma: no cover

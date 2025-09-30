@@ -165,7 +165,7 @@ def estrai_magazzino() -> None:
         writer.writerow(headers)
         writer.writerows(rows)
 
-    # print(f"✅  CSV generato: {CSV_PATH.relative_to(Path.cwd())}")  # Rimosso per ridurre log
+    print(f"📊 CSV magazzino generato: {CSV_PATH.relative_to(Path.cwd())} - {len(rows)} articoli estratti")
 
 
 def main() -> None:  # pragma: no cover
