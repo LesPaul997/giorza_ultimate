@@ -3,6 +3,26 @@
 {% block title %}Ordine {{ seriale }}{% endblock %}
 
 {% block content %}
+<!-- Script per marcare l'ordine come letto (solo per picker) -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Solo per picker (hanno un reparto)
+    const userRole = '{{ current_user.role }}';
+    const userReparto = '{{ current_user.reparto or "" }}';
+    
+    if (userRole === 'picker' && userReparto) {
+        // Marca l'ordine come letto quando si entra nel dettaglio
+        fetch('/api/order/{{ seriale }}/read', {
+            method: 'POST',
+            credentials: 'same-origin'
+        }).then(() => {
+            console.log('📖 Ordine {{ seriale }} marcato come letto');
+        }).catch(error => {
+            console.log('Errore nel marcare ordine come letto:', error);
+        });
+    }
+});
+</script>
 <!-- Banner per modalità "Solo Modifiche" -->
 {% if request.args.get('view') == 'modifiche' %}
 <div class="bg-green-50 border-l-4 border-green-400 p-4 mb-6">

@@ -235,7 +235,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Mobile cards
         document.getElementById('mobileOrdersContainer').innerHTML = orders.map(order => `
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer active:scale-98" 
-                 onclick="markOrderAsReadAndNavigate('${order.seriale}')">
+                 onclick="window.location.href='/ordine/${order.seriale}'"
+                 ontouchstart="markOrderAsRead('${order.seriale}')">
                 <div class="flex items-start justify-between mb-3">
                     <div>
                         <h3 class="text-lg font-semibold text-gray-900">Ordine ${order.numero_ordine}</h3>
@@ -391,11 +392,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Funzione per mobile: marca come letto e naviga
-    async function markOrderAsReadAndNavigate(seriale) {
-        await markOrderAsRead(seriale);
-        window.location.href = `/ordine/${seriale}`;
-    }
 
     // Variabili per la paginazione
     let currentPage = 1;
@@ -481,12 +477,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 !notifiedOrders.has(order.seriale)
             );
             
-            // Se ci sono ordini nuovi E non letti E non ancora notificati, attiva la notifica
-            // IMPORTANTE: Solo se non è il primo caricamento e se ci sono effettivamente nuovi ordini non letti
-            if (ordersToNotify.length > 0 && !isFirstLoad) {
-                console.log(`🎉 Nuovi ordini non letti arrivati: ${ordersToNotify.length}`);
-                console.log('Nuovi seriali non letti:', ordersToNotify.map(o => o.seriale));
-                console.log('🔊 Attivando suono di notifica...');
+            // LOGICA SEMPLIFICATA: Suona SOLO durante auto-refresh automatico, non durante scroll o reload manuali
+            // Controlla se questa è una chiamata di auto-refresh (non scroll o reload)
+            const isAutoRefresh = !isSearching && !append && page === 1;
+            
+            if (ordersToNotify.length > 0 && !isFirstLoad && isAutoRefresh) {
+                console.log(`🎉 NUOVI ORDINI ARRIVATI: ${ordersToNotify.length}`);
+                console.log('Nuovi seriali:', ordersToNotify.map(o => o.seriale));
                 
                 // Marca questi ordini come notificati
                 ordersToNotify.forEach(order => {
@@ -500,12 +497,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Errore nel salvataggio ordini notificati:', e);
                 }
                 
-                // Play notification sound (solo una volta per ordine)
+                // Play notification sound SOLO per nuovi ordini durante auto-refresh
                 await playNotificationSound();
                 
                 // Vibrazione lunga per tablet (se supportata)
                 if (navigator.vibrate) {
-                    // Pattern lungo: vibra-pausa-vibra-pausa-vibra-pausa-vibra-pausa-vibra
                     navigator.vibrate([300, 200, 300, 200, 300, 200, 300, 200, 300]);
                 }
                 
@@ -515,10 +511,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Show browser notification if supported
                 if ('Notification' in window && Notification.permission === 'granted') {
                     new Notification('Nuovi Ordini', {
-                        body: `${ordersToNotify.length} nuovo ordine/i non letto/i arrivato/i!`,
+                        body: `${ordersToNotify.length} nuovo ordine/i arrivato/i!`,
                         icon: '/favicon.ico',
-                        requireInteraction: true, // Keep notification until user interacts
-                        tag: 'new-orders' // Group notifications
+                        requireInteraction: true,
+                        tag: 'new-orders'
                     });
                 }
                 
@@ -528,15 +524,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const flashInterval = setInterval(() => {
                     document.title = flashCount % 2 === 0 ? '🚨 NUOVI ORDINI!' : originalTitle;
                     flashCount++;
-                    if (flashCount >= 10) { // Increased to 10 flashes
+                    if (flashCount >= 10) {
                         clearInterval(flashInterval);
                         document.title = originalTitle;
                     }
                 }, 500);
-            } else if (!isFirstLoad) {
-                // Log quando non ci sono nuovi ordini non letti (per debug)
-                console.log('✅ Nessun nuovo ordine non letto - Notifica non attivata');
-                console.log(`Debug: newOrderSeriali.size=${newOrderSeriali.size}, newUnreadOrders.length=${newUnreadOrders.length}, ordersToNotify.length=${ordersToNotify.length}`);
             }
             
             // Aggiorna sempre i contatori
