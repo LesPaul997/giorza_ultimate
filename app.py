@@ -832,7 +832,35 @@ def api_orders():
             
             # Per i picker, aggiungi solo lo stato del loro reparto
             if current_user.reparto:
-                order["my_reparto_status"] = status_by_reparto.get(current_user.reparto, {})
+                my_reparto_status = status_by_reparto.get(current_user.reparto, {})
+                order["my_reparto_status"] = my_reparto_status
+                
+                # Controlla se l'ordine è stato letto dal picker
+                is_read = OrderRead.query.filter_by(
+                    seriale=seriale, 
+                    operatore=current_user.username
+                ).first() is not None
+                
+                # MODIFICA: Per i picker, mostra lo stato del loro reparto nell'elenco
+                # Se c'è uno stato del reparto (in_preparazione, pronto, ecc.), mostra quello
+                # Altrimenti, se è stato letto, mostra "letto", altrimenti "nuovo"
+                reparto_status = my_reparto_status.get('status', 'nuovo')
+                
+                if reparto_status in ['in_preparazione', 'pronto']:
+                    # C'è uno stato operativo del reparto - mostra quello
+                    order["status"] = reparto_status
+                    order["status_operatore"] = my_reparto_status.get('operatore')
+                    order["status_timestamp"] = my_reparto_status.get('timestamp')
+                elif is_read:
+                    # Non c'è stato operativo ma è stato letto
+                    order["status"] = "letto"
+                    order["status_operatore"] = current_user.username
+                    order["status_timestamp"] = None
+                else:
+                    # Non c'è stato operativo e non è stato letto
+                    order["status"] = "nuovo"
+                    order["status_operatore"] = None
+                    order["status_timestamp"] = None
             else:
                 # Per i cassiere, aggiungi un riassunto dello stato
                 status_summary = []
@@ -2111,7 +2139,26 @@ def get_received_messages():
 @app.route("/api/order/<seriale>/notes")
 @login_required
 def get_order_notes(seriale):
-    notes = OrderNote.query.filter_by(seriale=seriale).order_by(OrderNote.timestamp.desc()).all()
+    # Per i picker, filtra solo le note del loro reparto
+    if current_user.reparto:
+        # Ottieni gli articoli del reparto dell'utente per questo ordine
+        articoli_reparto = set()
+        for order in app.config.get("ORDERS_CACHE", []):
+            if order.get("seriale") == seriale and order.get("codice_reparto") == current_user.reparto:
+                articoli_reparto.add(order.get("codice_articolo"))
+        
+        # Filtra le note: solo quelle per articoli del reparto o note generali dell'ordine
+        notes = OrderNote.query.filter_by(seriale=seriale).order_by(OrderNote.timestamp.desc()).all()
+        filtered_notes = []
+        for note in notes:
+            # Includi note generali (senza articolo) o note per articoli del reparto
+            if not note.articolo or note.articolo in articoli_reparto:
+                filtered_notes.append(note)
+        notes = filtered_notes
+    else:
+        # Per i cassiere, mostra tutte le note
+        notes = OrderNote.query.filter_by(seriale=seriale).order_by(OrderNote.timestamp.desc()).all()
+    
     return jsonify([{
         'id': note.id,
         'seriale': note.seriale,
@@ -2120,6 +2167,42 @@ def get_order_notes(seriale):
         'nota': note.nota,
         'timestamp': note.timestamp.isoformat()
     } for note in notes])
+
+
+@app.route("/api/order/<seriale>/read", methods=["POST"])
+@login_required
+def mark_order_read(seriale):
+    """Marca un ordine come letto dall'operatore corrente"""
+    # Verifica che l'ordine esista
+    order_exists = any(o["seriale"] == seriale for o in app.config["ORDERS_CACHE"])
+    if not order_exists:
+        return jsonify({"error": "Ordine non trovato"}), 404
+    
+    # Verifica che il picker abbia accesso a questo ordine
+    if current_user.reparto:
+        has_access = any(
+            o["seriale"] == seriale and o.get("codice_reparto") == current_user.reparto 
+            for o in app.config["ORDERS_CACHE"]
+        )
+        if not has_access:
+            return jsonify({"error": "Accesso negato"}), 403
+    
+    # Controlla se già letto
+    existing_read = OrderRead.query.filter_by(
+        seriale=seriale, 
+        operatore=current_user.username
+    ).first()
+    
+    if not existing_read:
+        # Crea nuovo record di lettura
+        order_read = OrderRead(
+            seriale=seriale,
+            operatore=current_user.username
+        )
+        db.session.add(order_read)
+        db.session.commit()
+    
+    return jsonify({"success": True})
 
 
 @app.route("/api/order/<seriale>/notes", methods=["POST"])
@@ -2158,7 +2241,26 @@ def add_order_note(seriale):
 @login_required
 def get_order_attachments(seriale):
     """Ottiene tutti gli allegati di un ordine"""
-    attachments = OrderAttachment.query.filter_by(seriale=seriale).order_by(OrderAttachment.timestamp.desc()).all()
+    # Per i picker, filtra solo gli allegati del loro reparto
+    if current_user.reparto:
+        # Ottieni gli articoli del reparto dell'utente per questo ordine
+        articoli_reparto = set()
+        for order in app.config.get("ORDERS_CACHE", []):
+            if order.get("seriale") == seriale and order.get("codice_reparto") == current_user.reparto:
+                articoli_reparto.add(order.get("codice_articolo"))
+        
+        # Filtra gli allegati: solo quelli per articoli del reparto o allegati generali dell'ordine
+        attachments = OrderAttachment.query.filter_by(seriale=seriale).order_by(OrderAttachment.timestamp.desc()).all()
+        filtered_attachments = []
+        for att in attachments:
+            # Includi allegati generali (senza articolo) o allegati per articoli del reparto
+            if not att.articolo or att.articolo in articoli_reparto:
+                filtered_attachments.append(att)
+        attachments = filtered_attachments
+    else:
+        # Per i cassiere, mostra tutti gli allegati
+        attachments = OrderAttachment.query.filter_by(seriale=seriale).order_by(OrderAttachment.timestamp.desc()).all()
+    
     return jsonify([{
         'id': att.id,
         'seriale': att.seriale,

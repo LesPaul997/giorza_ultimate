@@ -151,7 +151,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let lastOrderSeriali = new Set(); // Per tenere traccia dei seriali degli ordini precedenti
     let isFirstLoad = true; // Flag per il primo caricamento
     let isPolling = true;
-    let notifiedOrders = new Set(); // Traccia gli ordini già notificati
+    // Traccia gli ordini già notificati - usa sessionStorage per persistenza tra navigazioni
+    let notifiedOrders = new Set();
+    // Carica ordini già notificati da sessionStorage
+    try {
+        const savedNotified = sessionStorage.getItem('notifiedOrders');
+        if (savedNotified) {
+            notifiedOrders = new Set(JSON.parse(savedNotified));
+        }
+    } catch (e) {
+        console.log('Errore nel caricamento ordini notificati:', e);
+    }
 
     function formatDate(dateString) {
         const date = new Date(dateString);
@@ -214,7 +224,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <a href="/ordine/${order.seriale}" 
-                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                       onclick="markOrderAsRead('${order.seriale}')">
                         Visualizza
                     </a>
                 </td>
@@ -224,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Mobile cards
         document.getElementById('mobileOrdersContainer').innerHTML = orders.map(order => `
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer active:scale-98" 
-                 onclick="window.location.href='/ordine/${order.seriale}'">
+                 onclick="markOrderAsReadAndNavigate('${order.seriale}')">
                 <div class="flex items-start justify-between mb-3">
                     <div>
                         <h3 class="text-lg font-semibold text-gray-900">Ordine ${order.numero_ordine}</h3>
@@ -361,6 +372,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 6000);
     }
 
+    // Funzione per marcare un ordine come letto (solo per picker)
+    async function markOrderAsRead(seriale) {
+        // Solo per picker (hanno un reparto)
+        const userRole = '{{ current_user.role }}';
+        const userReparto = '{{ current_user.reparto or "" }}';
+        
+        if (userRole === 'picker' && userReparto) {
+            try {
+                await fetch(`/api/order/${seriale}/read`, {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                console.log(`📖 Ordine ${seriale} marcato come letto`);
+            } catch (error) {
+                console.log('Errore nel marcare ordine come letto:', error);
+            }
+        }
+    }
+
+    // Funzione per mobile: marca come letto e naviga
+    async function markOrderAsReadAndNavigate(seriale) {
+        await markOrderAsRead(seriale);
+        window.location.href = `/ordine/${seriale}`;
+    }
+
     // Variabili per la paginazione
     let currentPage = 1;
     let hasMore = true;
@@ -399,11 +435,24 @@ document.addEventListener('DOMContentLoaded', function() {
             lastUpdate.textContent = new Date().toLocaleTimeString('it-IT');
             
             // Pulisci gli ordini letti dal tracking delle notifiche
+            let needsSave = false;
             data.orders.forEach(order => {
                 if (order.status && order.status !== 'nuovo') {
-                    notifiedOrders.delete(order.seriale);
+                    if (notifiedOrders.has(order.seriale)) {
+                        notifiedOrders.delete(order.seriale);
+                        needsSave = true;
+                    }
                 }
             });
+            
+            // Salva aggiornamenti in sessionStorage se necessario
+            if (needsSave) {
+                try {
+                    sessionStorage.setItem('notifiedOrders', JSON.stringify([...notifiedOrders]));
+                } catch (e) {
+                    console.log('Errore nel salvataggio ordini notificati:', e);
+                }
+            }
             
             
             // Nascondi l'indicatore di caricamento
@@ -411,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function() {
             isLoading = false;
             
             // Check for new orders and play sound
-            const currentOrderSeriali = new Set(orders.map(order => order.seriale));
+            const currentOrderSeriali = new Set(data.orders.map(order => order.seriale));
             
             // Trova gli ordini effettivamente nuovi (seriali non presenti prima)
             const newOrderSeriali = new Set();
@@ -422,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Trova gli ordini nuovi E non letti (status "nuovo" o undefined)
-            const newUnreadOrders = orders.filter(order => 
+            const newUnreadOrders = data.orders.filter(order => 
                 newOrderSeriali.has(order.seriale) && 
                 (!order.status || order.status === 'nuovo')
             );
@@ -437,11 +486,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if (ordersToNotify.length > 0 && !isFirstLoad) {
                 console.log(`🎉 Nuovi ordini non letti arrivati: ${ordersToNotify.length}`);
                 console.log('Nuovi seriali non letti:', ordersToNotify.map(o => o.seriale));
+                console.log('🔊 Attivando suono di notifica...');
                 
                 // Marca questi ordini come notificati
                 ordersToNotify.forEach(order => {
                     notifiedOrders.add(order.seriale);
                 });
+                
+                // Salva in sessionStorage per persistenza tra navigazioni
+                try {
+                    sessionStorage.setItem('notifiedOrders', JSON.stringify([...notifiedOrders]));
+                } catch (e) {
+                    console.log('Errore nel salvataggio ordini notificati:', e);
+                }
                 
                 // Play notification sound (solo una volta per ordine)
                 await playNotificationSound();
@@ -479,10 +536,11 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (!isFirstLoad) {
                 // Log quando non ci sono nuovi ordini non letti (per debug)
                 console.log('✅ Nessun nuovo ordine non letto - Notifica non attivata');
+                console.log(`Debug: newOrderSeriali.size=${newOrderSeriali.size}, newUnreadOrders.length=${newUnreadOrders.length}, ordersToNotify.length=${ordersToNotify.length}`);
             }
             
             // Aggiorna sempre i contatori
-            lastOrderCount = orders.length;
+            lastOrderCount = data.orders.length;
             lastOrderSeriali = currentOrderSeriali;
             
             // Dopo il primo caricamento, imposta il flag a false
