@@ -693,7 +693,7 @@ CODMAG,CODART,Descrizione_Articolo,Saldo_Disponibile
 1    ,QUADRO30            ,FERRO QUADRO DA 30 S275                 ,-344.000
 1    ,RBCOC3060YAXOL01SN  ,BOC OVALE CV 30X60 YALE L01 + PLS       ,-10.000
 1    ,REMOVIE34502000     ,PANNELLO MOBILE ZNC mis. 320x200        ,-50.000
-1    ,RETECA30001005      ,RETE ELET. C.A. 200X300 MAG.10X10 F.5   ,-3509.180
+1    ,RETECA30001005      ,RETE ELET. C.A. 200X300 MAG.10X10 F.5   ,-3693.980
 1    ,RETECA30001006      ,RETE ELET. C.A. 200X300 MAG.10X10 F.6   ,-1998.000
 1    ,RETECA30001008      ,RETE ELET. C.A. 200X300 MAG.10X10 F.8   ,-94.800
 1    ,RETECA30001505      ,RETE ELET. C.A. 200X300 MAG.15X15 F.5   ,-454.050
@@ -708,7 +708,7 @@ CODMAG,CODART,Descrizione_Articolo,Saldo_Disponibile
 1    ,RL20174-40          ,SCARPA ANTINFORTUNISTICA YODA S3 CI SRC ,-1.000
 1    ,RL20174-41          ,SCARPA ANTINFORTUNISTICA YODA S3 CI SRC ,-1.000
 1    ,RL20174-42          ,SCARPA ANTINFORTUNISTICA YODA S3 CI SRC ,-3.000
-1    ,ROCCHETT08          ,TONDO NERV. C.A. MM. 08 ROCCHETTI       ,-3539.000
+1    ,ROCCHETT08          ,TONDO NERV. C.A. MM. 08 ROCCHETTI       ,-3540.000
 1    ,ROCCHETT10          ,TONDO NERV. C.A. MM. 10 ROCCHETTI       ,-3694.617
 1    ,ROCCHETT14          ,TONDO NERV. C.A. MM. 14 ROCCHETTI       ,-1000.000
 1    ,ROSI1820            ,ADATTATORE INDSP16A 2P 6H IP44 PR SHUKO ,-1.000
@@ -750,10 +750,10 @@ CODMAG,CODART,Descrizione_Articolo,Saldo_Disponibile
 1    ,TONDO024            ,TONDO LC DA 24 S275                     ,-319.500
 1    ,TONDO025            ,TONDO LC DA 25 S275                     ,-24.000
 1    ,TONDO030            ,TONDO LC DA 30 S275                     ,-70.000
-1    ,TONDOCA08           ,TONDO NERV. C.A. MM. 08                 ,-10241.300
+1    ,TONDOCA08           ,TONDO NERV. C.A. MM. 08                 ,-10242.300
 1    ,TONDOCA10           ,TONDO NERV. C.A. MM. 10                 ,-5389.210
 1    ,TONDOCA12           ,TONDO NERV. C.A. MM. 12                 ,-12760.120
-1    ,TONDOCA14           ,TONDO NERV. C.A. MM. 14                 ,-35391.530
+1    ,TONDOCA14           ,TONDO NERV. C.A. MM. 14                 ,-35464.130
 1    ,TONDOCA16           ,TONDO NERV. C.A. MM. 16                 ,-18669.890
 1    ,TONDOCA18           ,TONDO NERV. C.A. MM. 18                 ,-7415.000
 1    ,TONDOCA20           ,TONDO NERV. C.A. MM. 20                 ,-3100.000

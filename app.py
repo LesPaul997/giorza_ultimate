@@ -1558,6 +1558,17 @@ def propose_edit(seriale: str):
         )
         db.session.add(edit)
         
+        # Gestisci la nota se presente
+        nota = request.form.get("nota", "").strip()
+        if nota:
+            order_note = OrderNote(
+                seriale=seriale,
+                articolo=request.form["articolo"],
+                operatore=current_user.username,
+                nota=nota
+            )
+            db.session.add(order_note)
+        
         # Auto-start preparation quando un picker interagisce con l'ordine
         if current_user.role == "picker" and current_user.reparto:
             auto_start_preparation(seriale, current_user.username, current_user.reparto)

@@ -406,10 +406,10 @@
                             = {{ l.quantita_um2 }} {{ l.unita_misura_2 }}
                           </div>
                         {% endif %}
-                        <div class="text-base lg:text-xl font-bold text-green-600">{{ edit.quantita_nuova if edit else l.quantita }} {{ edit.unita_misura if edit else l.unita_misura }}</div>
+                        <div class="text-base lg:text-xl font-bold text-green-600 quantita-display">{{ edit.quantita_nuova if edit else l.quantita }} {{ edit.unita_misura if edit else l.unita_misura }}</div>
                       </div>
                     {% else %}
-                      <div class="text-base lg:text-xl font-bold text-gray-900">{{ l.quantita }} {{ l.unita_misura }}</div>
+                      <div class="text-base lg:text-xl font-bold text-gray-900 quantita-display">{{ l.quantita }} {{ l.unita_misura }}</div>
                       {% if l.unita_misura_2 and l.quantita_um2 %}
                         <div class="text-sm text-gray-600 mt-2">
                           = {{ l.quantita_um2 }} {{ l.unita_misura_2 }}
@@ -493,7 +493,7 @@
         {% for l in lines %}
           {% set confirmed = l.codice_articolo in edited_articoli %}
           {% set edit = edits|selectattr("articolo", "equalto", l.codice_articolo)|list|sort(attribute="timestamp")|last if confirmed else none %}
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 {{ 'border-l-4 border-l-green-400 bg-green-50' if confirmed else 'bg-gray-100' if l.removed else '' }} {{ 'opacity-50' if l.removed or l.unavailable else '' }}">
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 {{ 'border-l-4 border-l-green-400 bg-green-50' if confirmed else 'bg-gray-100' if l.removed else '' }} {{ 'opacity-50' if l.removed or l.unavailable else '' }}" data-articolo="{{ l.codice_articolo }}">
             
             <!-- Header con icona e info principali -->
             <div class="flex items-start space-x-3 mb-4">
@@ -539,10 +539,10 @@
                   {% if l.unita_misura_2 and l.quantita_um2 %}
                     <div class="text-sm text-gray-500 line-through">= {{ l.quantita_um2 }} {{ l.unita_misura_2 }}</div>
                   {% endif %}
-                  <div class="text-lg font-bold text-green-600">{{ edit.quantita_nuova if edit else l.quantita }} {{ edit.unita_misura if edit else l.unita_misura }}</div>
+                  <div class="text-lg font-bold text-green-600 quantita-display">{{ edit.quantita_nuova if edit else l.quantita }} {{ edit.unita_misura if edit else l.unita_misura }}</div>
                 </div>
               {% else %}
-                <div class="text-lg font-bold text-gray-900">{{ l.quantita }} {{ l.unita_misura }}</div>
+                <div class="text-lg font-bold text-gray-900 quantita-display">{{ l.quantita }} {{ l.unita_misura }}</div>
                 {% if l.unita_misura_2 and l.quantita_um2 %}
                   <div class="text-sm text-gray-600 mt-1">= {{ l.quantita_um2 }} {{ l.unita_misura_2 }}</div>
                 {% endif %}
@@ -1083,7 +1083,7 @@ async function salvaNotaResiduo(codice) {
 <!-- Edit Modal -->
 <div id="editModal" tabindex="-1" aria-hidden="true" class="hidden fixed top-0 left-0 right-0 z-50 w-full p-2 sm:p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-[calc(100%-1rem)] max-h-full">
   <div class="relative w-full max-w-sm sm:max-w-md max-h-full mx-auto">
-          <form method="POST" id="editForm" class="relative bg-white rounded-lg shadow-xl" onsubmit="return validateEditForm()">
+          <form method="POST" id="editForm" class="relative bg-white rounded-lg shadow-xl" onsubmit="return submitEditForm(event)">
       <div class="flex items-start justify-between p-4 border-b rounded-t">
         <h3 class="text-xl font-semibold text-gray-900">Modifica Quantità</h3>
         <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center" data-modal-hide="editModal">
@@ -1113,6 +1113,13 @@ async function salvaNotaResiduo(codice) {
           <div id="quantitaError" class="hidden mt-1 text-sm text-red-600"></div>
         </div>
         <div>
+          <label for="modalNota" class="block text-sm font-medium text-gray-700 mb-2">Nota (opzionale)</label>
+          <textarea name="nota" id="modalNota" rows="3"
+                    class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Inserisci una nota per questo articolo..."></textarea>
+          <div id="notaError" class="hidden mt-1 text-sm text-red-600"></div>
+        </div>
+        <div>
           <label for="modalUnita" class="block text-sm font-medium text-gray-700 mb-2">Unità di Misura <span class="text-red-500">*</span></label>
           <select name="unita_misura" id="modalUnita" required
                   class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -1132,7 +1139,7 @@ async function salvaNotaResiduo(codice) {
       </div>
       <div class="flex items-center justify-end p-4 space-x-2 border-t border-gray-200 rounded-b">
         <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" data-modal-hide="editModal">Annulla</button>
-        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" onclick="return validateEditForm()">Salva</button>
+        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">Salva</button>
         </div>
       </form>
     </div>
@@ -1173,6 +1180,9 @@ async function salvaNotaResiduo(codice) {
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Ripristina la posizione di scroll e evidenzia l'articolo dopo il reload
+  restoreScrollPositionAndHighlight();
+  
   // Edit modal functionality
   const editModal = document.getElementById('editModal');
   const editButtons = document.querySelectorAll('[data-modal-target="editModal"]');
@@ -1297,6 +1307,8 @@ function openEditModal(articolo, quantita, unita) {
   document.getElementById('modalQuantita').value = quantita;
   const unitaSelect = document.getElementById('modalUnita');
   setSelectUnit(unitaSelect, unita);
+  // Reset sempre il campo nota
+  document.getElementById('modalNota').value = '';
   document.getElementById('editForm').action = "{{ url_for('propose_edit', seriale=seriale) }}";
   document.getElementById('editModal').classList.remove('hidden');
   
@@ -1307,21 +1319,26 @@ function openEditModal(articolo, quantita, unita) {
   try {
     const currentStatus = '{{ order_status or "nuovo" }}';
     if (currentStatus !== 'in_preparazione' && currentStatus !== 'pronto') {
-      setTimeout(async () => {
+      setTimeout(() => {
         const wants = confirm('Vuoi mettere l\'ordine in lavorazione?');
         if (wants) {
-          try {
-            const res = await fetch("{{ url_for('update_order_status', seriale=seriale) }}", {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({ status: 'in_preparazione' })
-            });
-            if (!res.ok) console.warn('Impossibile impostare stato in_preparazione');
-          } catch (e) {
-            console.warn('Errore aggiornamento stato:', e);
-          }
+          // Crea un form temporaneo per inviare i dati
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = "{{ url_for('update_order_status', seriale=seriale) }}";
+          
+          // Aggiungi il campo status
+          const statusField = document.createElement('input');
+          statusField.type = 'hidden';
+          statusField.name = 'status';
+          statusField.value = 'in_preparazione';
+          form.appendChild(statusField);
+          
+          // Aggiungi il form al documento e invialo
+          document.body.appendChild(form);
+          form.submit();
         }
-      }, 0);
+      }, 100); // Piccolo delay per evitare conflitti
     }
   } catch (_) { /* ignore */ }
 }
@@ -1330,6 +1347,7 @@ function hideEditErrors() {
   document.getElementById('editError').classList.add('hidden');
   document.getElementById('quantitaError').classList.add('hidden');
   document.getElementById('unitaError').classList.add('hidden');
+  document.getElementById('notaError').classList.add('hidden');
 }
 
 function showEditError(message) {
@@ -1371,8 +1389,8 @@ async function submitUnavailable() {
       return;
     }
     closeUnavailableModal();
-    // Ricarica per riflettere le modifiche
-    window.location.reload();
+    // Aggiorna in tempo reale senza reload
+    showSuccessMessage('Articoli aggiornati con successo!');
   } catch (e) {
     alert('Errore di rete nel salvataggio');
   }
@@ -1401,7 +1419,7 @@ async function markSingleUnavailable(articolo) {
     
     const data = await res.json();
     if (data.success) {
-      location.reload();
+      showSuccessMessage('Articolo segnato come non disponibile!');
     } else {
       alert('Errore: ' + data.error);
     }
@@ -1462,6 +1480,7 @@ function validateEditForm() {
   
   const quantita = document.getElementById('modalQuantita').value.trim();
   const unita = document.getElementById('modalUnita').value.trim();
+  const nota = document.getElementById('modalNota').value.trim();
   let isValid = true;
   
   // Validazione quantità
@@ -1482,11 +1501,140 @@ function validateEditForm() {
     isValid = false;
   }
   
+  // Validazione nota (opzionale, ma se presente deve essere valida)
+  if (nota && nota.length > 500) {
+    document.getElementById('notaError').textContent = 'La nota non può superare i 500 caratteri';
+    document.getElementById('notaError').classList.remove('hidden');
+    isValid = false;
+  }
+  
   if (!isValid) {
     showEditError('Compila correttamente tutti i campi obbligatori');
   }
   
   return isValid;
+}
+
+// Funzione per gestire il submit del form di modifica con reload mantenendo posizione
+function submitEditForm(event) {
+  event.preventDefault();
+  
+  // Valida il form
+  if (!validateEditForm()) {
+    return false;
+  }
+  
+  // Salva la posizione di scroll corrente
+  const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+  sessionStorage.setItem('scrollPosition', scrollPosition);
+  
+  // Salva l'articolo per evidenziarlo dopo il reload
+  const articolo = document.getElementById('modalArticolo').value;
+  sessionStorage.setItem('highlightArticolo', articolo);
+  
+  // Invia il form normalmente (con reload)
+  document.getElementById('editForm').submit();
+  
+  return false;
+}
+
+// Funzione per mostrare un messaggio di successo (rimossa su richiesta)
+function showSuccessMessage(message) {
+  // Messaggio rimosso su richiesta dell'utente
+}
+
+// Funzione per ripristinare la posizione di scroll e evidenziare l'articolo dopo il reload
+function restoreScrollPositionAndHighlight() {
+  // Ripristina la posizione di scroll
+  const savedScrollPosition = sessionStorage.getItem('scrollPosition');
+  if (savedScrollPosition) {
+    window.scrollTo(0, parseInt(savedScrollPosition));
+    sessionStorage.removeItem('scrollPosition');
+  }
+  
+  // Evidenzia l'articolo modificato
+  const articoloToHighlight = sessionStorage.getItem('highlightArticolo');
+  if (articoloToHighlight) {
+    const row = document.querySelector(`[data-articolo="${articoloToHighlight}"]`);
+    if (row) {
+      // Aggiungi un effetto visivo di successo
+      row.style.backgroundColor = '#f0f9ff';
+      row.style.borderColor = '#3b82f6';
+      row.style.transition = 'all 0.3s ease';
+      
+      // Rimuovi l'effetto dopo 3 secondi
+      setTimeout(() => {
+        row.style.backgroundColor = '';
+        row.style.borderColor = '';
+        row.style.transition = '';
+      }, 3000);
+    }
+    sessionStorage.removeItem('highlightArticolo');
+  }
+}
+
+// Funzione per aggiornare la riga in tempo reale dopo conferma
+function updateRowAfterConfirm(articolo, quantita, unita) {
+  // Trova la riga dell'articolo
+  const row = document.querySelector(`[data-articolo="${articolo}"]`);
+  if (!row) return;
+  
+  // Aggiorna la quantità visualizzata
+  const quantitaElement = row.querySelector('.quantita-display');
+  if (quantitaElement) {
+    quantitaElement.textContent = `${quantita} ${unita}`;
+    quantitaElement.className = quantitaElement.className.replace('text-gray-900', 'text-green-600');
+  }
+  
+  // Aggiungi un effetto visivo di successo
+  row.style.backgroundColor = '#f0fdf4';
+  row.style.borderColor = '#22c55e';
+  setTimeout(() => {
+    row.style.backgroundColor = '';
+    row.style.borderColor = '';
+  }, 2000);
+}
+
+// Funzione per aggiornare la riga in tempo reale dopo modifica
+function updateRowAfterEdit(articolo, quantita, unita, nota) {
+  // Trova la riga dell'articolo
+  const row = document.querySelector(`[data-articolo="${articolo}"]`);
+  if (!row) return;
+  
+  // Aggiorna la quantità visualizzata
+  const quantitaElement = row.querySelector('.quantita-display');
+  if (quantitaElement) {
+    quantitaElement.textContent = `${quantita} ${unita}`;
+  }
+  
+  // Se c'è una nota, aggiungila sotto la riga
+  if (nota && nota.trim()) {
+    // Rimuovi eventuali note precedenti per questo articolo
+    const existingNote = row.querySelector('.articolo-note');
+    if (existingNote) {
+      existingNote.remove();
+    }
+    
+    // Crea il div per la nota
+    const noteDiv = document.createElement('div');
+    noteDiv.className = 'articolo-note mt-2 p-2 bg-blue-50 border-l-4 border-blue-400 rounded-r';
+    noteDiv.innerHTML = `
+      <div class="text-sm text-blue-800">
+        <strong>Nota:</strong> ${nota}
+      </div>
+    `;
+    
+    // Inserisci la nota dopo la riga
+    row.parentNode.insertBefore(noteDiv, row.nextSibling);
+  }
+  
+  // Aggiungi un effetto visivo di successo
+  row.style.backgroundColor = '#f0f9ff';
+  row.style.borderColor = '#3b82f6';
+  setTimeout(() => {
+    row.style.backgroundColor = '';
+    row.style.borderColor = '';
+  }, 2000);
 }
 
 function validateAttachmentForm() {
@@ -1555,6 +1703,13 @@ function validateNoteForm() {
 
 function openConfirmModal(articolo, quantita, unita) {
   if (confirm(`Confermare l'articolo ${articolo} con quantità ${quantita} ${unita}?`)) {
+    // Salva la posizione di scroll corrente
+    const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+    sessionStorage.setItem('scrollPosition', scrollPosition);
+    
+    // Salva l'articolo per evidenziarlo dopo il reload
+    sessionStorage.setItem('highlightArticolo', articolo);
+    
     // Crea un form temporaneo per inviare i dati
     const form = document.createElement('form');
     form.method = 'POST';
@@ -1988,7 +2143,7 @@ window.deleteAttachment = function(attachmentId) {
       if (typeof loadAttachments === 'function') {
         loadAttachments();
       } else {
-        window.location.reload();
+        showSuccessMessage('Allegato caricato con successo!');
       }
     } else {
       return response.json().then(error => {
