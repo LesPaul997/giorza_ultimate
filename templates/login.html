@@ -3,28 +3,26 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<div class="min-h-[calc(100vh-200px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+<div class="min-h-[calc(100vh-200px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white">
   <div class="max-w-md w-full space-y-8">
     <!-- Header -->
     <div class="text-center">
-      <div class="mx-auto h-20 w-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl">
-        <svg class="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-        </svg>
-      </div>
-      <div class="mb-6">
-        <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-          GIORZA
-        </h1>
-        <p class="text-sm text-gray-500 font-medium mb-4">Innovazione e digitalizzazione</p>
-        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-purple-600 mx-auto rounded-full"></div>
+      <div class="mb-6 flex justify-center">
+        <video id="logoAnimato" 
+               autoplay 
+               muted 
+               playsinline 
+               class="h-48 w-auto object-contain">
+          <source src="{{ url_for('static', filename='logo_animato.mp4') }}" type="video/mp4">
+          Il tuo browser non supporta il tag video.
+        </video>
       </div>
       <h2 class="text-2xl font-bold text-gray-900 mb-2">Accedi al Sistema</h2>
       <p class="text-gray-600">Inserisci le tue credenziali per accedere</p>
     </div>
 
     <!-- Login Form -->
-    <div class="bg-white rounded-xl shadow-2xl border border-gray-100 p-8">
+    <div class="bg-white rounded-xl shadow-2xl border-2 border-gray-300 p-8">
       {# ─── messaggi flash ──────────────────────────────── #}
       {% with messages = get_flashed_messages(category_filter=['danger', 'info']) %}
         {% if messages %}
@@ -127,10 +125,13 @@
         <div>
           <button
             type="submit"
-            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
+            style="background-color: #6783ca; focus:ring-color: #6783ca;"
+            onmouseover="this.style.backgroundColor='#5670b5'"
+            onmouseout="this.style.backgroundColor='#6783ca'"
           >
             <span class="absolute left-0 inset-y-0 flex items-center pl-3">
-              <svg class="h-5 w-5 text-blue-300 group-hover:text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="h-5 w-5 text-white opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
               </svg>
             </span>
@@ -140,20 +141,6 @@
       </form>
     </div>
 
-    <!-- Footer -->
-    <div class="text-center">
-      <div class="flex flex-col items-center space-y-2">
-        <div class="flex items-center space-x-2">
-          <div class="w-5 h-5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-            </svg>
-          </div>
-          <span class="text-sm font-semibold text-gray-700">DIGITALMENTEONLINE</span>
-        </div>
-        <p class="text-xs text-gray-500">di Mario Giordano</p>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -162,6 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const usernameInput = document.getElementById('username');
   const repartoSection = document.getElementById('repartoSection');
   const repartoSelect = document.getElementById('reparto');
+  const logoAnimato = document.getElementById('logoAnimato');
   
   // Lista di username che sono operatori interni (senza filtro reparto)
   const operatori_interni = ['cassa', 'cassiere', 'cassier', 'admin', 'supervisor', 'manager', 'display', 'trasporti'];
@@ -187,6 +175,16 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Controlla all'avvio
   checkUserRole();
+  
+  // ANIMAZIONE LOGO VIDEO: Parte solo una volta al caricamento
+  if (logoAnimato) {
+    // Il video partirà automaticamente una volta grazie ad autoplay
+    // NON ha loop, quindi si fermerà dopo la prima riproduzione
+    logoAnimato.addEventListener('ended', function() {
+      console.log('🎬 Animazione logo completata');
+    });
+    console.log('🎬 Logo animato caricato e avviato');
+  }
 });
 </script>
 {% endblock %}

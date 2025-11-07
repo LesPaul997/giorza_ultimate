@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable, List
-from datetime import datetime
+from datetime import datetime, timezone
 import pyodbc
 
 from flask import (
@@ -80,7 +80,7 @@ app.config.update(
 )
 
 # Lazy import del modello: evita dipendenze circolari con db.init_app
-from models import OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, User, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, ArticoloReparto, db  # noqa: E402  pylint: disable=wrong-import-position
+from models import OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, User, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, ArticoloReparto, CalendarioAppuntamento, TodoItem, NoteAppunto, AnnuncioUrgente, db  # noqa: E402  pylint: disable=wrong-import-position
 
 db.init_app(app)
 
@@ -94,6 +94,14 @@ login_manager.login_view = "login"
 @login_manager.user_loader
 def load_user(user_id: str):  # type: ignore[override]
     return db.session.get(User, int(user_id))  # pyright: ignore[reportUnknownMemberType]
+
+
+# ------------------------------------------------------------------
+# Helper per datetime (compatibilità)
+# ------------------------------------------------------------------
+def get_utc_now():
+    """Restituisce datetime UTC timezone-aware (compatibile con SQLAlchemy)"""
+    return datetime.now(timezone.utc)
 
 
 # ------------------------------------------------------------------
@@ -629,6 +637,16 @@ def home():
                 'timestamp': record.timestamp
             }
     
+    # OTTIMIZZAZIONE: Pre-calcola tutti i reparti per tutti gli ordini in una sola passata
+    reparti_by_seriale = {}
+    for order in orders:
+        seriale = order.get("seriale")
+        reparto = order.get("codice_reparto")
+        if seriale and reparto:
+            if seriale not in reparti_by_seriale:
+                reparti_by_seriale[seriale] = set()
+            reparti_by_seriale[seriale].add(reparto)
+    
     for seriale, order in unique_orders.items():
         if current_user.reparto:
             # Per i picker, controlla lo stato del loro reparto
@@ -639,7 +657,8 @@ def home():
             # Per i cassiere, controlla lo stato generale dell'ordine
             # basato sullo stato di tutti i reparti coinvolti
             status_by_reparto = reparto_statuses.get(seriale, {})
-            reparti_ordine = get_ordine_reparti(seriale)
+            # OTTIMIZZAZIONE: Usa la cache pre-calcolata invece di get_ordine_reparti()
+            reparti_ordine = list(reparti_by_seriale.get(seriale, set()))
             
             if not reparti_ordine:
                 status = 'nuovo'
@@ -801,7 +820,26 @@ def api_orders():
                 'timestamp': record.timestamp
             }
     
-    # 3. Applica gli stati agli ordini
+    # 3. OTTIMIZZAZIONE: Carica tutti i read del picker in una sola query (solo per picker)
+    read_seriali_set = set()
+    if current_user.reparto and all_seriali:
+        read_records = OrderRead.query.filter(
+            OrderRead.seriale.in_(all_seriali),
+            OrderRead.operatore == current_user.username
+        ).all()
+        read_seriali_set = {r.seriale for r in read_records}
+    
+    # 4. OTTIMIZZAZIONE: Pre-calcola tutti i reparti per tutti gli ordini in una sola passata
+    reparti_by_seriale = {}
+    for order in app.config["ORDERS_CACHE"]:
+        seriale = order.get("seriale")
+        reparto = order.get("codice_reparto")
+        if seriale and reparto:
+            if seriale not in reparti_by_seriale:
+                reparti_by_seriale[seriale] = set()
+            reparti_by_seriale[seriale].add(reparto)
+    
+    # 5. Applica gli stati agli ordini
     for seriale, order in unique_orders.items():
         # Stato generale dell'ordine
         if seriale in general_statuses:
@@ -818,8 +856,8 @@ def api_orders():
             # Usa i dati precaricati invece di chiamare get_ordine_status_by_reparto
             status_by_reparto = reparto_statuses.get(seriale, {})
             
-            # Aggiungi stati 'nuovo' per reparti mancanti
-            reparti_ordine = get_ordine_reparti(seriale)
+            # OTTIMIZZAZIONE: Usa la cache pre-calcolata invece di get_ordine_reparti()
+            reparti_ordine = list(reparti_by_seriale.get(seriale, set()))
             for reparto in reparti_ordine:
                 if reparto not in status_by_reparto:
                     status_by_reparto[reparto] = {
@@ -835,11 +873,8 @@ def api_orders():
                 my_reparto_status = status_by_reparto.get(current_user.reparto, {})
                 order["my_reparto_status"] = my_reparto_status
                 
-                # Controlla se l'ordine è stato letto dal picker
-                is_read = OrderRead.query.filter_by(
-                    seriale=seriale, 
-                    operatore=current_user.username
-                ).first() is not None
+                # OTTIMIZZAZIONE: Usa il Set pre-caricato invece di query individuale
+                is_read = seriale in read_seriali_set
                 
                 # MODIFICA: Per i picker, mostra lo stato del loro reparto nell'elenco
                 # Se c'è uno stato del reparto (in_preparazione, pronto, ecc.), mostra quello
@@ -956,6 +991,551 @@ def magazzino():
 @login_required
 def anagrafica():
     return render_template("anagrafica.html")
+
+
+@app.route("/organizza-giornata")
+@login_required
+def organizza_giornata():
+    # Solo per cassiere
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    return render_template("organizza_giornata.html")
+
+
+# ============================================
+# API ROUTES PER "ORGANIZZA GIORNATA"
+# ============================================
+
+# CALENDARIO APPUNTAMENTI
+@app.route("/api/organizza/calendario", methods=["GET"])
+@login_required
+def api_calendario_get():
+    """Ottieni gli appuntamenti (ottimizzato: solo 6 mesi avanti/indietro)"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    from datetime import date, timedelta
+    
+    # Ottimizzazione: carica solo 6 mesi indietro e 12 mesi avanti
+    oggi = date.today()
+    data_inizio = oggi - timedelta(days=180)  # 6 mesi indietro
+    data_fine = oggi + timedelta(days=365)    # 12 mesi avanti
+    
+    appuntamenti = CalendarioAppuntamento.query.filter(
+        CalendarioAppuntamento.data >= data_inizio,
+        CalendarioAppuntamento.data <= data_fine
+    ).order_by(CalendarioAppuntamento.data, CalendarioAppuntamento.ora).all()
+    
+    return jsonify([{
+        'id': a.id,
+        'titolo': a.titolo,
+        'descrizione': a.descrizione,
+        'data': a.data.isoformat() if a.data else None,
+        'ora': a.ora.strftime('%H:%M') if a.ora else None,
+        'colore': a.colore,
+        'creato_da': a.creato_da
+    } for a in appuntamenti])
+
+
+@app.route("/api/organizza/calendario", methods=["POST"])
+@login_required
+def api_calendario_post():
+    """Crea nuovo appuntamento"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    data = request.json
+    from datetime import date, time
+    
+    appuntamento = CalendarioAppuntamento(
+        titolo=data.get('titolo'),
+        descrizione=data.get('descrizione'),
+        data=datetime.strptime(data.get('data'), '%Y-%m-%d').date() if data.get('data') else date.today(),
+        ora=datetime.strptime(data.get('ora'), '%H:%M').time() if data.get('ora') else None,
+        colore=data.get('colore', 'blue'),
+        creato_da=current_user.username
+    )
+    
+    db.session.add(appuntamento)
+    db.session.commit()
+    
+    return jsonify({
+        'id': appuntamento.id,
+        'titolo': appuntamento.titolo,
+        'descrizione': appuntamento.descrizione,
+        'data': appuntamento.data.isoformat(),
+        'ora': appuntamento.ora.strftime('%H:%M') if appuntamento.ora else None,
+        'colore': appuntamento.colore
+    }), 201
+
+
+@app.route("/api/organizza/calendario/<int:appuntamento_id>", methods=["PUT"])
+@login_required
+def api_calendario_put(appuntamento_id):
+    """Modifica appuntamento"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    appuntamento = CalendarioAppuntamento.query.get_or_404(appuntamento_id)
+    data = request.json
+    from datetime import date, time
+    
+    if data.get('titolo'):
+        appuntamento.titolo = data['titolo']
+    if data.get('descrizione') is not None:
+        appuntamento.descrizione = data['descrizione']
+    if data.get('data'):
+        appuntamento.data = datetime.strptime(data['data'], '%Y-%m-%d').date()
+    if data.get('ora'):
+        appuntamento.ora = datetime.strptime(data['ora'], '%H:%M').time()
+    if data.get('colore'):
+        appuntamento.colore = data['colore']
+    
+    appuntamento.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    
+    return jsonify({
+        'id': appuntamento.id,
+        'titolo': appuntamento.titolo,
+        'descrizione': appuntamento.descrizione,
+        'data': appuntamento.data.isoformat(),
+        'ora': appuntamento.ora.strftime('%H:%M') if appuntamento.ora else None,
+        'colore': appuntamento.colore
+    })
+
+
+@app.route("/api/organizza/calendario/<int:appuntamento_id>", methods=["DELETE"])
+@login_required
+def api_calendario_delete(appuntamento_id):
+    """Elimina appuntamento"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    appuntamento = CalendarioAppuntamento.query.get_or_404(appuntamento_id)
+    db.session.delete(appuntamento)
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+
+# TO-DO LIST
+@app.route("/api/organizza/todo", methods=["GET"])
+@login_required
+def api_todo_get():
+    """Ottieni tutti i task (con filtri avanzati)"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    # Filtri opzionali
+    filtro_stato = request.args.get('stato', 'tutti')  # tutti, attivi, completati, confermati
+    filtro_operatore = request.args.get('operatore', None)  # Filtra per operatore assegnato
+    filtro_priorita = request.args.get('priorita', None)  # Filtra per priorità
+    filtro_categoria = request.args.get('categoria', None)  # Filtra per categoria
+    
+    # Query base: tutti i task (non solo quelli creati dall'utente, ma anche quelli assegnati)
+    query = TodoItem.query.filter(
+        (TodoItem.creato_da == current_user.username) | 
+        (TodoItem.operatore_assegnato == current_user.username)
+    )
+    
+    # Applica filtri
+    if filtro_stato == 'attivi':
+        query = query.filter(TodoItem.completato == False)
+    elif filtro_stato == 'completati':
+        query = query.filter(TodoItem.completato == True, TodoItem.confermato == False)
+    elif filtro_stato == 'confermati':
+        query = query.filter(TodoItem.confermato == True)
+    
+    if filtro_operatore:
+        query = query.filter(TodoItem.operatore_assegnato == filtro_operatore)
+    
+    if filtro_priorita:
+        query = query.filter(TodoItem.priorita == filtro_priorita)
+    
+    if filtro_categoria:
+        query = query.filter(TodoItem.categoria == filtro_categoria)
+    
+    # Ottimizzazione: limita a 500 task per evitare problemi di performance
+    todos = query.order_by(
+        TodoItem.ordine, 
+        TodoItem.completato, 
+        TodoItem.priorita.desc(),  # Priorità alta prima
+        TodoItem.scadenza.asc().nullslast(),  # Scadenze prima
+        TodoItem.created_at.desc()
+    ).limit(500).all()  # Limite per performance
+    
+    return jsonify([{
+        'id': t.id,
+        'titolo': t.titolo,
+        'descrizione': t.descrizione,
+        'completato': t.completato,
+        'confermato': t.confermato,
+        'priorita': t.priorita,
+        'categoria': t.categoria,
+        'scadenza': t.scadenza.isoformat() if t.scadenza else None,
+        'operatore_assegnato': t.operatore_assegnato,
+        'creato_da': t.creato_da,
+        'completato_da': t.completato_da,
+        'confermato_da': t.confermato_da,
+        'data_completamento': t.data_completamento.isoformat() if t.data_completamento else None,
+        'data_conferma': t.data_conferma.isoformat() if t.data_conferma else None,
+        'note_completamento': t.note_completamento,
+        'ordine': t.ordine,
+        'created_at': t.created_at.isoformat() if t.created_at else None
+    } for t in todos])
+
+
+@app.route("/api/organizza/todo", methods=["POST"])
+@login_required
+def api_todo_post():
+    """Crea nuovo task"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    data = request.json
+    from datetime import date
+    
+    todo = TodoItem(
+        titolo=data.get('titolo'),
+        descrizione=data.get('descrizione'),
+        priorita=data.get('priorita', 'media'),
+        categoria=data.get('categoria'),
+        scadenza=datetime.strptime(data['scadenza'], '%Y-%m-%d').date() if data.get('scadenza') else None,
+        operatore_assegnato=data.get('operatore_assegnato'),
+        creato_da=current_user.username,
+        ordine=data.get('ordine', 0)
+    )
+    
+    db.session.add(todo)
+    db.session.commit()
+    
+    return jsonify({
+        'id': todo.id,
+        'titolo': todo.titolo,
+        'descrizione': todo.descrizione,
+        'completato': todo.completato,
+        'confermato': todo.confermato,
+        'priorita': todo.priorita,
+        'categoria': todo.categoria,
+        'scadenza': todo.scadenza.isoformat() if todo.scadenza else None,
+        'operatore_assegnato': todo.operatore_assegnato,
+        'ordine': todo.ordine
+    }), 201
+
+
+@app.route("/api/organizza/todo/<int:todo_id>", methods=["PUT"])
+@login_required
+def api_todo_put(todo_id):
+    """Modifica task (creatore o operatore assegnato possono modificare)"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    todo = TodoItem.query.get_or_404(todo_id)
+    # Permetti modifica se sei il creatore o l'operatore assegnato
+    if todo.creato_da != current_user.username and todo.operatore_assegnato != current_user.username:
+        abort(403)
+    
+    data = request.json
+    from datetime import date
+    
+    if data.get('titolo'):
+        todo.titolo = data['titolo']
+    if data.get('descrizione') is not None:
+        todo.descrizione = data['descrizione']
+    if 'completato' in data:
+        todo.completato = data['completato']
+    if data.get('priorita'):
+        todo.priorita = data['priorita']
+    if data.get('categoria') is not None:
+        todo.categoria = data['categoria']
+    if data.get('scadenza'):
+        todo.scadenza = datetime.strptime(data['scadenza'], '%Y-%m-%d').date() if data['scadenza'] else None
+    if data.get('operatore_assegnato') is not None:
+        todo.operatore_assegnato = data['operatore_assegnato']
+    if 'ordine' in data:
+        todo.ordine = data['ordine']
+    
+    todo.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    
+    return jsonify({
+        'id': todo.id,
+        'titolo': todo.titolo,
+        'descrizione': todo.descrizione,
+        'completato': todo.completato,
+        'confermato': todo.confermato,
+        'priorita': todo.priorita,
+        'categoria': todo.categoria,
+        'scadenza': todo.scadenza.isoformat() if todo.scadenza else None,
+        'operatore_assegnato': todo.operatore_assegnato,
+        'ordine': todo.ordine
+    })
+
+
+@app.route("/api/organizza/todo/<int:todo_id>", methods=["DELETE"])
+@login_required
+def api_todo_delete(todo_id):
+    """Elimina task (solo il creatore può eliminare)"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    todo = TodoItem.query.get_or_404(todo_id)
+    if todo.creato_da != current_user.username:
+        abort(403)
+    
+    db.session.delete(todo)
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+
+@app.route("/api/organizza/todo/<int:todo_id>/completa", methods=["POST"])
+@login_required
+def api_todo_completa(todo_id):
+    """Completa un task (con note opzionali)"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    todo = TodoItem.query.get_or_404(todo_id)
+    # Solo l'operatore assegnato o il creatore possono completare
+    if todo.operatore_assegnato and todo.operatore_assegnato != current_user.username:
+        if todo.creato_da != current_user.username:
+            abort(403)
+    
+    data = request.json
+    todo.completato = True
+    todo.completato_da = current_user.username
+    todo.data_completamento = datetime.now(timezone.utc)
+    todo.note_completamento = data.get('note_completamento')
+    todo.updated_at = datetime.now(timezone.utc)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'id': todo.id,
+        'completato': todo.completato,
+        'completato_da': todo.completato_da,
+        'data_completamento': todo.data_completamento.isoformat(),
+        'note_completamento': todo.note_completamento
+    })
+
+
+@app.route("/api/organizza/todo/<int:todo_id>/conferma", methods=["POST"])
+@login_required
+def api_todo_conferma(todo_id):
+    """Conferma un task completato (solo il creatore può confermare)"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    todo = TodoItem.query.get_or_404(todo_id)
+    if todo.creato_da != current_user.username:
+        abort(403)
+    
+    if not todo.completato:
+        return jsonify({'error': 'Il task deve essere completato prima di essere confermato'}), 400
+    
+    todo.confermato = True
+    todo.confermato_da = current_user.username
+    todo.data_conferma = datetime.now(timezone.utc)
+    todo.updated_at = datetime.now(timezone.utc)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'id': todo.id,
+        'confermato': todo.confermato,
+        'confermato_da': todo.confermato_da,
+        'data_conferma': todo.data_conferma.isoformat()
+    })
+
+
+# Endpoint rimosso: assegnazione operatore ora è manuale (campo testo)
+
+
+# NOTE/APPUNTI
+@app.route("/api/organizza/note", methods=["GET"])
+@login_required
+def api_note_get():
+    """Ottieni le note dell'utente"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    note = NoteAppunto.query.filter_by(creato_da=current_user.username).first()
+    
+    if not note:
+        # Crea foglio vuoto se non esiste
+        note = NoteAppunto(creato_da=current_user.username, contenuto='')
+        db.session.add(note)
+        db.session.commit()
+    
+    return jsonify({
+        'contenuto': note.contenuto or '',
+        'updated_at': note.updated_at.isoformat() if note.updated_at else None
+    })
+
+
+@app.route("/api/organizza/note", methods=["POST"])
+@login_required
+def api_note_post():
+    """Salva le note"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    data = request.json
+    contenuto = data.get('contenuto', '')
+    
+    note = NoteAppunto.query.filter_by(creato_da=current_user.username).first()
+    
+    if note:
+        note.contenuto = contenuto
+        note.updated_at = datetime.now(timezone.utc)
+    else:
+        note = NoteAppunto(creato_da=current_user.username, contenuto=contenuto)
+        db.session.add(note)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'contenuto': note.contenuto,
+        'updated_at': note.updated_at.isoformat() if note.updated_at else None
+    })
+
+
+# ANNUNCI URGENTI
+@app.route("/api/organizza/annunci", methods=["GET"])
+@login_required
+def api_annunci_get():
+    """Ottieni tutti gli annunci urgenti attivi"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    include_all = request.args.get('all') == '1'
+    
+    query = AnnuncioUrgente.query
+    if not include_all:
+        query = query.filter(
+            AnnuncioUrgente.attivo == True,
+            (AnnuncioUrgente.scadenza == None) | (AnnuncioUrgente.scadenza > now)
+        )
+    
+    annunci = query.order_by(AnnuncioUrgente.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': a.id,
+        'titolo': a.titolo,
+        'messaggio': a.messaggio,
+        'attivo': a.attivo,
+        'creato_da': a.creato_da,
+        'created_at': a.created_at.isoformat() if a.created_at else None,
+        'scadenza': a.scadenza.isoformat() if a.scadenza else None
+    } for a in annunci])
+
+
+@app.route("/api/organizza/annunci", methods=["POST"])
+@login_required
+def api_annunci_post():
+    """Crea nuovo annuncio urgente"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    data = request.json or {}
+    from datetime import datetime, timezone
+    
+    titolo = (data.get('titolo') or '').strip()
+    messaggio = (data.get('messaggio') or '').strip()
+    if not titolo or not messaggio:
+        return jsonify({'error': 'Titolo e messaggio sono obbligatori'}), 400
+    
+    scadenza = None
+    scadenza_raw = data.get('scadenza')
+    if scadenza_raw:
+        try:
+            cleaned = scadenza_raw.strip().replace('Z', '+00:00')
+            scadenza = datetime.fromisoformat(cleaned)
+        except ValueError:
+            return jsonify({'error': 'Formato scadenza non valido'}), 400
+    
+    annuncio = AnnuncioUrgente(
+        titolo=titolo,
+        messaggio=messaggio,
+        attivo=True,
+        creato_da=current_user.username,
+        scadenza=scadenza
+    )
+    
+    db.session.add(annuncio)
+    db.session.commit()
+    
+    return jsonify({
+        'id': annuncio.id,
+        'titolo': annuncio.titolo,
+        'messaggio': annuncio.messaggio,
+        'creato_da': annuncio.creato_da,
+        'created_at': annuncio.created_at.isoformat() if annuncio.created_at else None,
+        'scadenza': annuncio.scadenza.isoformat() if annuncio.scadenza else None,
+        'attivo': annuncio.attivo
+    }), 201
+
+
+@app.route("/api/organizza/annunci/<int:annuncio_id>", methods=["PUT"])
+@login_required
+def api_annunci_put(annuncio_id):
+    """Modifica annuncio"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    annuncio = AnnuncioUrgente.query.get_or_404(annuncio_id)
+    data = request.json or {}
+    from datetime import datetime
+    
+    if 'titolo' in data:
+        titolo = (data.get('titolo') or '').strip()
+        if not titolo:
+            return jsonify({'error': 'Il titolo non può essere vuoto'}), 400
+        annuncio.titolo = titolo
+    if 'messaggio' in data:
+        messaggio = (data.get('messaggio') or '').strip()
+        if not messaggio:
+            return jsonify({'error': 'Il messaggio non può essere vuoto'}), 400
+        annuncio.messaggio = messaggio
+    if 'attivo' in data:
+        annuncio.attivo = bool(data['attivo'])
+    if 'scadenza' in data:
+        scadenza_raw = data.get('scadenza')
+        if scadenza_raw:
+            try:
+                cleaned = scadenza_raw.strip().replace('Z', '+00:00')
+                annuncio.scadenza = datetime.fromisoformat(cleaned)
+            except ValueError:
+                return jsonify({'error': 'Formato scadenza non valido'}), 400
+        else:
+            annuncio.scadenza = None
+    
+    db.session.commit()
+    
+    return jsonify({
+        'id': annuncio.id,
+        'titolo': annuncio.titolo,
+        'messaggio': annuncio.messaggio,
+        'attivo': annuncio.attivo,
+        'scadenza': annuncio.scadenza.isoformat() if annuncio.scadenza else None
+    })
+
+
+@app.route("/api/organizza/annunci/<int:annuncio_id>", methods=["DELETE"])
+@login_required
+def api_annunci_delete(annuncio_id):
+    """Elimina annuncio"""
+    if current_user.role not in ['cassiere', 'cassa']:
+        abort(403)
+    
+    annuncio = AnnuncioUrgente.query.get_or_404(annuncio_id)
+    db.session.delete(annuncio)
+    db.session.commit()
+    
+    return jsonify({'success': True})
 
 
 @app.route("/ordini/preparazione")
@@ -2133,6 +2713,40 @@ def get_received_messages():
         'timestamp': msg.timestamp.isoformat(),
         'read': msg.read
     } for msg in messages])
+
+
+# ------- ORDER PREVIEW ---------------
+@app.route("/api/order/<seriale>/preview")
+@login_required
+def get_order_preview(seriale):
+    """Ottiene un'anteprima veloce delle righe ordine (solo per cassiere)"""
+    # Solo per cassiere
+    if current_user.reparto:
+        return jsonify({"error": "Accesso negato"}), 403
+    
+    # Ottieni le righe ordine dalla cache
+    righe = [o for o in app.config.get("ORDERS_CACHE", []) if o.get("seriale") == seriale]
+    
+    if not righe:
+        return jsonify({"error": "Ordine non trovato"}), 404
+    
+    # NON raggruppare, mostra TUTTE le righe così come sono
+    righe_preview = []
+    for riga in righe:
+        righe_preview.append({
+            'codice_articolo': riga.get("codice_articolo", ""),
+            'descrizione_articolo': riga.get("descrizione_articolo", ""),
+            'descrizione_supplementare': riga.get("descrizione_supplementare", ""),
+            'quantita': riga.get("quantita", 0),
+            'unita_misura': riga.get("unita_misura", "")
+        })
+    
+    return jsonify({
+        'seriale': seriale,
+        'numero_ordine': righe[0].get('numero_ordine') if righe else '',
+        'nome_cliente': righe[0].get('nome_cliente') if righe else '',
+        'righe': righe_preview
+    })
 
 
 # ------- ORDER NOTES ---------------

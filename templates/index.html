@@ -26,14 +26,6 @@
         <div id="searchStatus" class="mt-2 text-sm text-gray-600 hidden">
             <span id="searchStatusText">Cercando...</span>
         </div>
-        
-        <!-- Test Notification Button -->
-        <div class="mt-4 flex justify-end">
-            <button id="testNotificationBtn" 
-                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                🔔 Test Notifica
-            </button>
-        </div>
     </div>
 
     <!-- Orders Table -->
@@ -94,6 +86,40 @@
     </div>
 </div>
 
+<!-- Modal Anteprima Ordine (solo per cassiere) -->
+<div id="previewModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900" id="previewModalTitle">Anteprima Ordine</h3>
+            <button onclick="closePreviewModal()" class="text-gray-400 hover:text-gray-600 transition">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Body -->
+        <div class="mt-4">
+            <div id="previewModalContent" class="space-y-3 max-h-96 overflow-y-auto">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="mt-4 pt-3 border-t border-gray-200 flex justify-between">
+            <button onclick="closePreviewModal()" 
+                    class="px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                Chiudi
+            </button>
+            <a id="previewModalLink" href="#" 
+               class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Visualizza Dettagli Completi
+            </a>
+        </div>
+    </div>
+</div>
+
 <!-- Audio element for notification sound -->
 <audio id="notificationSound" preload="auto">
   <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" type="audio/wav">
@@ -135,6 +161,72 @@
 </style>
 
 <script>
+// Funzioni GLOBALI per il modal di anteprima ordine (devono essere fuori dal DOMContentLoaded!)
+async function openPreviewModal(seriale) {
+    console.log('🔍 openPreviewModal chiamato per seriale:', seriale);
+    
+    const modal = document.getElementById('previewModal');
+    const modalTitle = document.getElementById('previewModalTitle');
+    const modalContent = document.getElementById('previewModalContent');
+    const modalLink = document.getElementById('previewModalLink');
+    
+    console.log('📋 Elementi modal trovati:', {modal, modalTitle, modalContent, modalLink});
+    
+    // Mostra il modal con loading
+    modal.classList.remove('hidden');
+    modalContent.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p class="mt-2 text-sm text-gray-500">Caricamento...</p></div>';
+    
+    console.log('📡 Chiamata API a:', `/api/order/${seriale}/preview`);
+    
+    try {
+        const response = await fetch(`/api/order/${seriale}/preview`);
+        console.log('📥 Response ricevuta:', response.status, response.ok);
+        const data = await response.json();
+        console.log('📦 Dati ricevuti:', data);
+        
+        if (response.ok) {
+            // Aggiorna il titolo
+            modalTitle.textContent = `Anteprima Ordine ${data.numero_ordine} - ${data.nome_cliente}`;
+            
+            // Aggiorna il link
+            modalLink.href = `/ordine/${seriale}`;
+            
+            // Crea il contenuto
+            if (data.righe && data.righe.length > 0) {
+                modalContent.innerHTML = data.righe.map(riga => `
+                    <div class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-mono text-gray-600">${riga.codice_articolo}</p>
+                                <p class="mt-1 text-sm font-medium text-gray-900">${riga.descrizione_articolo || '-'}</p>
+                                ${riga.descrizione_supplementare ? `
+                                    <p class="mt-1 text-xs text-red-600 whitespace-pre-line">${riga.descrizione_supplementare}</p>
+                                ` : ''}
+                            </div>
+                            <div class="ml-4 flex-shrink-0 text-right">
+                                <p class="text-sm font-semibold text-gray-900">${riga.quantita}</p>
+                                <p class="text-xs text-gray-500">${riga.unita_misura}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                modalContent.innerHTML = '<p class="text-center text-gray-500">Nessuna riga trovata</p>';
+            }
+        } else {
+            modalContent.innerHTML = `<p class="text-center text-red-500">Errore: ${data.error || 'Impossibile caricare l\'anteprima'}</p>`;
+        }
+    } catch (error) {
+        console.error('Errore nel caricamento anteprima:', error);
+        modalContent.innerHTML = '<p class="text-center text-red-500">Errore di connessione</p>';
+    }
+}
+
+function closePreviewModal() {
+    const modal = document.getElementById('previewModal');
+    modal.classList.add('hidden');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const ordersTableBody = document.getElementById('ordersTableBody');
     const searchInput = document.getElementById('searchInput');
@@ -199,6 +291,8 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingState.classList.add('hidden');
         
         // Desktop table
+        const isCassiere = '{{ current_user.role }}' === 'cassiere' || '{{ current_user.role }}' === 'cassa';
+        
         ordersTableBody.innerHTML = orders.map(order => `
             <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -223,26 +317,46 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${order.status_operatore ? `<br><span class="text-xs text-gray-400">da ${order.status_operatore}</span>` : ''}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <a href="/ordine/${order.seriale}" 
-                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                       onclick="markOrderAsRead('${order.seriale}')">
-                        Visualizza
-                    </a>
+                    <div class="flex items-center justify-end space-x-2">
+                        ${isCassiere ? `
+                        <button onclick="openPreviewModal('${order.seriale}'); event.stopPropagation();" 
+                                class="inline-flex items-center justify-center w-7 h-7 border border-blue-300 rounded-full text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                title="Anteprima veloce">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </button>
+                        ` : ''}
+                        <a href="/ordine/${order.seriale}" 
+                           class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                           onclick="markOrderAsRead('${order.seriale}')">
+                            Visualizza
+                        </a>
+                    </div>
                 </td>
             </tr>
         `).join('');
 
         // Mobile cards
         document.getElementById('mobileOrdersContainer').innerHTML = orders.map(order => `
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer active:scale-98" 
-                 onclick="window.location.href='/ordine/${order.seriale}'"
-                 ontouchstart="markOrderAsRead('${order.seriale}')">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200">
                 <div class="flex items-start justify-between mb-3">
-                    <div>
+                    <div onclick="window.location.href='/ordine/${order.seriale}'; markOrderAsRead('${order.seriale}')" class="flex-1 cursor-pointer">
                         <h3 class="text-lg font-semibold text-gray-900">Ordine ${order.numero_ordine}</h3>
                         <p class="text-sm text-gray-500">${formatDate(order.data_ordine)}</p>
                     </div>
-                    ${getStatusBadge(order.status)}
+                    <div class="flex items-center space-x-2">
+                        ${getStatusBadge(order.status)}
+                        ${isCassiere ? `
+                        <button onclick="openPreviewModal('${order.seriale}'); event.stopPropagation();" 
+                                class="inline-flex items-center justify-center w-8 h-8 border border-blue-300 rounded-full text-blue-600 hover:bg-blue-50 active:bg-blue-100"
+                                title="Anteprima veloce">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </button>
+                        ` : ''}
+                    </div>
                 </div>
                 
                 <div class="mb-3">
@@ -391,7 +505,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-
 
     // Variabili per la paginazione
     let currentPage = 1;
@@ -611,25 +724,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayOrders(filteredOrders);
             }
         }, 300);
-    });
-
-    // Test notification button
-    document.getElementById('testNotificationBtn').addEventListener('click', async function() {
-        console.log('🧪 Testing notification system...');
-        await playNotificationSound();
-        showVisualNotification();
-        
-        // Flash the page title
-        const originalTitle = document.title;
-        let flashCount = 0;
-        const flashInterval = setInterval(() => {
-            document.title = flashCount % 2 === 0 ? '🧪 TEST NOTIFICA!' : originalTitle;
-            flashCount++;
-            if (flashCount >= 6) {
-                clearInterval(flashInterval);
-                document.title = originalTitle;
-            }
-        }, 500);
     });
 
     // Request notification permission on page load

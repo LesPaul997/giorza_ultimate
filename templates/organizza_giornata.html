@@ -1,0 +1,1801 @@
+{% extends "base.html" %}
+
+{% block title %}Organizza Giornata{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Navbar scorrevole annunci urgenti */
+    .annunci-scorrevole {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        color: white;
+        padding: 10px 0;
+        overflow: hidden;
+        white-space: nowrap;
+        position: relative;
+    }
+    
+    .annunci-scorrevole-content {
+        display: inline-block;
+        animation: scroll 30s linear infinite;
+        font-size: 0.875rem;
+    }
+    
+    .annunci-scorrevole:hover .annunci-scorrevole-content {
+        animation-play-state: paused;
+    }
+    
+    @keyframes scroll {
+        0% { transform: translateX(100%); }
+        100% { transform: translateX(-100%); }
+    }
+    
+    @media (max-width: 768px) {
+        .annunci-scorrevole {
+            padding: 8px 0;
+        }
+        
+        .annunci-scorrevole-content {
+            font-size: 0.75rem;
+        }
+    }
+    
+    /* Widget cards */
+    .widget-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .widget-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    /* Modal styles */
+    .modal-overlay {
+        backdrop-filter: blur(4px);
+    }
+    
+    /* Calendario Grid - Responsive */
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background: #e5e7eb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .calendar-day-header {
+        background: #f9fafb;
+        padding: 12px 8px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .calendar-day {
+        background: white;
+        min-height: 120px;
+        padding: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    
+    .calendar-day:hover {
+        background: #f3f4f6;
+        z-index: 10;
+    }
+    
+    .calendar-day.other-month {
+        background: #f9fafb;
+        color: #9ca3af;
+    }
+    
+    .calendar-day.today {
+        background: #eff6ff;
+        border: 2px solid #6783ca;
+    }
+    
+    .calendar-day-number {
+        font-weight: 600;
+        font-size: 0.875rem;
+        margin-bottom: 4px;
+        color: #111827;
+    }
+    
+    .calendar-day.other-month .calendar-day-number {
+        color: #9ca3af;
+    }
+    
+    .calendar-event {
+        font-size: 0.75rem;
+        padding: 2px 6px;
+        margin-bottom: 2px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: all 0.2s;
+    }
+    
+    .calendar-event:hover {
+        transform: scale(1.02);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .calendar-event.blue { background: #3b82f6; color: white; }
+    .calendar-event.red { background: #ef4444; color: white; }
+    .calendar-event.green { background: #10b981; color: white; }
+    .calendar-event.yellow { background: #f59e0b; color: white; }
+    .calendar-event.purple { background: #8b5cf6; color: white; }
+    
+    /* Responsive - Tablet */
+    @media (max-width: 1024px) {
+        .calendar-day {
+            min-height: 100px;
+            padding: 6px;
+        }
+        
+        .calendar-day-header {
+            padding: 10px 6px;
+            font-size: 0.75rem;
+        }
+        
+        .calendar-day-number {
+            font-size: 0.8rem;
+        }
+        
+        .calendar-event {
+            font-size: 0.7rem;
+            padding: 2px 4px;
+        }
+    }
+    
+    /* Responsive - Mobile */
+    @media (max-width: 768px) {
+        .calendar-day {
+            min-height: 80px;
+            padding: 4px;
+        }
+        
+        .calendar-day-header {
+            padding: 8px 4px;
+            font-size: 0.65rem;
+            letter-spacing: 0;
+        }
+        
+        .calendar-day-number {
+            font-size: 0.7rem;
+            margin-bottom: 2px;
+        }
+        
+        .calendar-event {
+            font-size: 0.65rem;
+            padding: 1px 3px;
+            margin-bottom: 1px;
+        }
+        
+        /* Nascondi eventi su mobile, mostra solo numero */
+        .calendar-event-text {
+            display: none;
+        }
+        
+        .calendar-event-count {
+            display: block;
+            font-size: 0.6rem;
+            text-align: center;
+            padding: 2px;
+        }
+    }
+    
+    /* Modal responsive */
+    @media (max-width: 768px) {
+        .modal-content {
+            margin: 0;
+            max-height: 100vh;
+            border-radius: 0;
+        }
+        
+        .modal-header {
+            padding: 1rem;
+        }
+        
+        .modal-body {
+            padding: 1rem;
+        }
+    }
+    
+    /* Utility per truncate text */
+    .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Navbar Annunci Urgenti Scorrevole -->
+<div id="annunciNavbar" class="annunci-scorrevole hidden">
+    <div class="annunci-scorrevole-content">
+        <span class="font-bold mr-4">🚨 ANNUNCI URGENTI:</span>
+        <span id="annunciContent"></span>
+    </div>
+</div>
+
+<div class="space-y-4 sm:space-y-8">
+  <!-- Header -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="flex items-center space-x-2 sm:space-x-3 mb-2">
+          <h1 class="text-2xl sm:text-3xl font-bold" style="color: #6783ca;">📅 Organizza Giornata</h1>
+        </div>
+        <p class="text-sm sm:text-base text-gray-600">Pianifica e gestisci la tua giornata lavorativa</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+    
+    <!-- WIDGET 1: CALENDARIO -->
+    <div class="widget-card bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6" onclick="openCalendarioModal()">
+      <div class="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-4">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-900">Calendario</h3>
+          <p class="text-xs sm:text-sm text-gray-500">Appuntamenti e eventi</p>
+        </div>
+      </div>
+      <div id="calendarioPreview" class="text-xs sm:text-sm text-gray-600">
+        <p>Nessun appuntamento</p>
+      </div>
+    </div>
+
+    <!-- WIDGET 2: TO-DO LIST -->
+    <div class="widget-card bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6" onclick="openTodoModal()">
+      <div class="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-4">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-900">To-Do List</h3>
+          <p class="text-xs sm:text-sm text-gray-500">Gestisci le tue attività</p>
+        </div>
+      </div>
+      <div id="todoPreview" class="text-xs sm:text-sm text-gray-600">
+        <p>Nessun task</p>
+      </div>
+    </div>
+
+    <!-- WIDGET 3: NOTE/APPUNTI -->
+    <div class="widget-card bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6" onclick="openNoteModal()">
+      <div class="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-4">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-900">Note</h3>
+          <p class="text-xs sm:text-sm text-gray-500">Appunti rapidi</p>
+        </div>
+      </div>
+      <div id="notePreview" class="text-xs sm:text-sm text-gray-600">
+        <p>Nessuna nota</p>
+      </div>
+    </div>
+
+    <!-- WIDGET 4: ANNUNCI URGENTI -->
+    <div class="widget-card bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6" onclick="openAnnunciModal()">
+      <div class="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-4">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r from-red-500 to-red-600 rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base sm:text-lg font-semibold text-gray-900">Annunci Urgenti</h3>
+          <p class="text-xs sm:text-sm text-gray-500">Comunicazioni importanti</p>
+        </div>
+      </div>
+      <div id="annunciPreview" class="text-xs sm:text-sm text-gray-600">
+        <p>Nessun annuncio</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL CALENDARIO -->
+<div id="calendarioModal" class="hidden fixed inset-0 z-50 modal-overlay bg-black bg-opacity-50">
+  <div class="flex items-center justify-center min-h-screen p-2 sm:p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div class="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto justify-between sm:justify-start">
+          <div class="flex items-center space-x-2">
+            <button onclick="prevMonth()" class="p-2 hover:bg-white rounded-lg transition-colors">
+              <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+              </svg>
+            </button>
+            <h2 id="calendarioMonthYear" class="text-lg sm:text-2xl font-bold text-gray-900">Gennaio 2025</h2>
+            <button onclick="nextMonth()" class="p-2 hover:bg-white rounded-lg transition-colors">
+              <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+            </button>
+          </div>
+          <button onclick="goToToday()" class="px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg bg-white border border-gray-300 hover:bg-gray-50">
+            Oggi
+          </button>
+        </div>
+        <div class="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto justify-end">
+          <button onclick="openNewAppuntamentoForm()" class="px-3 sm:px-4 py-2 text-sm sm:text-base rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg" style="background-color: #6783ca;">
+            <span class="hidden sm:inline">+ Nuovo Evento</span>
+            <span class="sm:hidden">+ Evento</span>
+          </button>
+          <button onclick="closeCalendarioModal()" class="text-gray-400 hover:text-gray-600 p-2">
+            <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Calendario Grid -->
+      <div class="flex-1 overflow-y-auto p-2 sm:p-6">
+        <div id="calendarioGrid" class="calendar-grid">
+          <!-- Calendario verrà generato qui -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FORM EVENTO -->
+<div id="eventoFormModal" class="hidden fixed inset-0 z-[60] modal-overlay bg-black bg-opacity-50">
+  <div class="flex items-center justify-center min-h-screen p-2 sm:p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[95vh] overflow-y-auto">
+      <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 id="eventoFormTitle" class="text-lg sm:text-xl font-bold text-gray-900">Nuovo Evento</h2>
+        <button onclick="closeEventoFormModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form id="eventoForm" class="p-4 sm:p-6 space-y-4">
+        <input type="hidden" id="eventoId" value="">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Titolo *</label>
+          <input type="text" id="eventoTitolo" required
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Data *</label>
+          <input type="date" id="eventoData" required
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Ora</label>
+          <input type="time" id="eventoOra"
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Descrizione</label>
+          <textarea id="eventoDescrizione" rows="3"
+                    class="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Colore</label>
+          <select id="eventoColore"
+                  class="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="blue">Blu</option>
+            <option value="red">Rosso</option>
+            <option value="green">Verde</option>
+            <option value="yellow">Giallo</option>
+            <option value="purple">Viola</option>
+          </select>
+        </div>
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4">
+          <button type="submit" class="flex-1 px-4 py-2 rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg text-base sm:text-sm" style="background-color: #6783ca;">
+            Salva
+          </button>
+          <button type="button" onclick="closeEventoFormModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-base sm:text-sm">
+            Annulla
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LISTA EVENTI GIORNO -->
+<div id="eventiGiornoModal" class="hidden fixed inset-0 z-[60] modal-overlay bg-black bg-opacity-50">
+  <div class="flex items-center justify-center min-h-screen p-2 sm:p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[95vh] overflow-y-auto">
+      <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 id="eventiGiornoTitle" class="text-lg sm:text-xl font-bold text-gray-900">Eventi del giorno</h2>
+        <button onclick="closeEventiGiornoModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="p-4 sm:p-6">
+        <div id="eventiGiornoList" class="space-y-3 mb-4">
+          <!-- Eventi caricati qui -->
+        </div>
+        <button onclick="openNewAppuntamentoForm(selectedDate)" class="w-full px-4 py-2 rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg text-sm sm:text-base" style="background-color: #6783ca;">
+          + Aggiungi Evento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TO-DO LIST -->
+<div id="todoModal" class="hidden fixed inset-0 z-50 modal-overlay">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r" style="background: linear-gradient(135deg, #6783ca 0%, #5a6fb8 100%);">
+        <h2 class="text-xl sm:text-2xl font-bold text-white">✅ To-Do List Avanzata</h2>
+        <button onclick="closeTodoModal()" class="text-white hover:text-gray-200 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Filtri e Azioni -->
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between mb-4">
+          <button onclick="openNewTodoForm()" class="px-4 py-2 rounded-lg text-white font-medium transition-all hover:shadow-lg transform hover:scale-105" style="background-color: #6783ca;">
+            <span class="flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Nuovo Task
+            </span>
+          </button>
+          
+          <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
+            <select id="filtroStato" onchange="applyTodoFilters()" class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="tutti">Tutti</option>
+              <option value="attivi">Attivi</option>
+              <option value="completati">Completati</option>
+              <option value="confermati">Confermati</option>
+            </select>
+            
+            <select id="filtroPriorita" onchange="applyTodoFilters()" class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="">Tutte le priorità</option>
+              <option value="alta">Alta</option>
+              <option value="media">Media</option>
+              <option value="bassa">Bassa</option>
+            </select>
+            
+            <input type="text" id="filtroOperatore" placeholder="Filtra per operatore..." onkeyup="applyTodoFilters()" class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            
+            <input type="text" id="filtroCategoria" placeholder="Categoria..." onkeyup="applyTodoFilters()" class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          </div>
+        </div>
+      </div>
+      
+      <!-- Lista Task -->
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div id="todoList" class="space-y-3 sm:space-y-4">
+          <!-- Task caricati qui -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUOVO/EDIT TASK -->
+<div id="todoFormModal" class="hidden fixed inset-0 z-50 modal-overlay">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 class="text-lg sm:text-xl font-bold text-gray-900" id="todoFormTitle">Nuovo Task</h3>
+        <button onclick="closeTodoFormModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+        <form id="todoForm" onsubmit="saveTodo(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Titolo *</label>
+              <input type="text" id="todoTitolo" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Descrizione</label>
+              <textarea id="todoDescrizione" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Priorità</label>
+                <select id="todoPriorita" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="bassa">Bassa</option>
+                  <option value="media" selected>Media</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                <input type="text" id="todoCategoria" placeholder="es. Urgente, Manutenzione..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Scadenza</label>
+                <input type="date" id="todoScadenza" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Assegna a (nome operatore)</label>
+                <input type="text" id="todoOperatore" placeholder="es. Mario, Luca..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+              <button type="submit" class="flex-1 px-4 py-2 rounded-lg text-white font-medium transition-all hover:shadow-lg" style="background-color: #6783ca;">
+                Salva
+              </button>
+              <button type="button" onclick="closeTodoFormModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50">
+                Annulla
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COMPLETAMENTO TASK -->
+<div id="todoCompletaModal" class="hidden fixed inset-0 z-50 modal-overlay">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 class="text-lg sm:text-xl font-bold text-gray-900">Completa Task</h3>
+        <button onclick="closeTodoCompletaModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="p-4 sm:p-6">
+        <form onsubmit="confirmCompletaTodo(event)">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Note di completamento (opzionale)</label>
+            <textarea id="todoNoteCompletamento" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+          </div>
+          <div class="flex gap-3">
+            <button type="submit" class="flex-1 px-4 py-2 rounded-lg text-white font-medium transition-all hover:shadow-lg bg-green-600 hover:bg-green-700">
+              Conferma Completamento
+            </button>
+            <button type="button" onclick="closeTodoCompletaModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50">
+              Annulla
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOTE -->
+<div id="noteModal" class="hidden fixed inset-0 z-50 modal-overlay">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 class="text-2xl font-bold text-gray-900">📝 Note e Appunti</h2>
+        <button onclick="closeNoteModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <textarea id="noteTextarea" 
+                  placeholder="Scrivi qui i tuoi appunti..."
+                  class="w-full h-full min-h-[400px] p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  oninput="saveNoteDebounced()"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ANNUNCI -->
+<div id="annunciModal" class="hidden fixed inset-0 z-50 modal-overlay">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between" style="background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);">
+        <h2 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+          <span class="text-2xl">🚨</span>
+          Annunci Urgenti
+        </h2>
+        <button onclick="closeAnnunciModal()" class="text-white hover:text-red-100 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Azioni -->
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start sm:items-center justify-between">
+          <button onclick="openNewAnnuncioForm()" class="px-4 py-2 rounded-lg text-white font-medium transition-all hover:shadow-lg transform hover:scale-105" style="background-color: #6783ca;">
+            <span class="flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Nuovo Annuncio
+            </span>
+          </button>
+          <div class="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto items-center">
+            <label for="annunciFiltroStato" class="text-sm font-medium text-gray-600">Filtro:</label>
+            <select id="annunciFiltroStato" onchange="changeAnnunciFilter(this.value)" class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              <option value="tutti">Tutti</option>
+              <option value="attivi">Solo attivi</option>
+              <option value="scaduti">Scaduti</option>
+              <option value="inattivi">Disattivati</option>
+            </select>
+          </div>
+        </div>
+        <div id="annunciStats" class="mt-4 text-xs sm:text-sm text-gray-600 flex flex-wrap gap-3"></div>
+      </div>
+      
+      <!-- Lista -->
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6 bg-white">
+        <div id="annunciList" class="space-y-3 sm:space-y-4">
+          <!-- Annunci -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FORM ANNUNCIO -->
+<div id="annuncioFormModal" class="hidden fixed inset-0 z-[60] modal-overlay bg-black bg-opacity-50">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[95vh] overflow-y-auto">
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 id="annuncioFormTitle" class="text-lg sm:text-xl font-bold text-gray-900">Nuovo Annuncio</h3>
+        <button onclick="closeAnnuncioFormModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="p-4 sm:p-6">
+        <form id="annuncioForm" onsubmit="saveAnnuncio(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Titolo *</label>
+            <input type="text" id="annuncioTitolo" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Messaggio *</label>
+            <textarea id="annuncioMessaggio" rows="4" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"></textarea>
+            <p class="text-xs text-gray-500 mt-1">Suggerimento: informazioni concise, massimo due frasi per la massima leggibilità.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Scadenza</label>
+              <input type="datetime-local" id="annuncioScadenza" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              <p class="text-xs text-gray-400 mt-1">Lascia vuoto per tenerlo attivo finché non lo disattivi.</p>
+            </div>
+            <div id="annuncioAttivoGroup" class="flex items-center gap-2 pt-4 sm:pt-6 hidden">
+              <input type="checkbox" id="annuncioAttivo" class="w-4 h-4 text-red-500 border-gray-300 rounded focus:ring-red-500">
+              <label for="annuncioAttivo" class="text-sm text-gray-700">Annuncio attivo</label>
+            </div>
+          </div>
+          <p id="annuncioFormError" class="text-sm text-red-600 hidden"></p>
+          <div class="flex gap-3 pt-4">
+            <button type="submit" class="flex-1 px-4 py-2 rounded-lg text-white font-medium transition-all hover:shadow-lg" style="background-color: #6783ca;">
+              Salva
+            </button>
+            <button type="button" onclick="closeAnnuncioFormModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50">
+              Annulla
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Variabili globali
+let calendarioData = [];
+let todoData = [];
+let noteData = '';
+let annunciData = [];
+let annunciManageData = [];
+let annunciFilterStatus = 'tutti';
+let currentAnnuncioEditingId = null;
+let saveNoteTimeout = null;
+let selectedDate = null;
+let renderCalendarTimeout = null; // Debounce per rendering calendario
+
+// ============================================
+// CALENDARIO
+// ============================================
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+
+const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+const dayNames = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+
+async function loadCalendario() {
+    try {
+        const response = await fetch('/api/organizza/calendario');
+        calendarioData = await response.json();
+        updateCalendarioPreview();
+        renderCalendar();
+    } catch (error) {
+        console.error('Errore caricamento calendario:', error);
+    }
+}
+
+function updateCalendarioPreview() {
+    const preview = document.getElementById('calendarioPreview');
+    const oggi = new Date().toISOString().split('T')[0];
+    const prossimi = calendarioData
+        .filter(a => a.data >= oggi)
+        .sort((a, b) => a.data.localeCompare(b.data))
+        .slice(0, 3);
+    
+    if (prossimi.length === 0) {
+        preview.innerHTML = '<p>Nessun appuntamento</p>';
+    } else {
+        preview.innerHTML = prossimi.map(a => 
+            `<p class="mb-1 text-xs">• ${a.titolo}</p>`
+        ).join('');
+    }
+}
+
+function openCalendarioModal() {
+    currentMonth = new Date().getMonth();
+    currentYear = new Date().getFullYear();
+    document.getElementById('calendarioModal').classList.remove('hidden');
+    loadCalendario();
+}
+
+function closeCalendarioModal() {
+    document.getElementById('calendarioModal').classList.add('hidden');
+}
+
+function renderCalendar() {
+    const grid = document.getElementById('calendarioGrid');
+    const monthYear = document.getElementById('calendarioMonthYear');
+    
+    monthYear.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+    
+    // Primo giorno del mese
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    // Giorno di oggi
+    const today = new Date();
+    const isCurrentMonth = today.getMonth() === currentMonth && today.getFullYear() === currentYear;
+    const todayDate = isCurrentMonth ? today.getDate() : null;
+    
+    let html = '';
+    
+    // Header giorni settimana
+    dayNames.forEach(day => {
+        html += `<div class="calendar-day-header">${day}</div>`;
+    });
+    
+    // Giorni del mese precedente (per riempire la prima settimana)
+    const prevMonthLastDay = new Date(currentYear, currentMonth, 0).getDate();
+    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+        const day = prevMonthLastDay - i;
+        html += `<div class="calendar-day other-month">
+            <div class="calendar-day-number">${day}</div>
+        </div>`;
+    }
+    
+    // Giorni del mese corrente
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayEvents = calendarioData.filter(e => e.data === dateStr);
+        const isToday = day === todayDate;
+        
+        html += `<div class="calendar-day ${isToday ? 'today' : ''}" onclick="openDayEvents('${dateStr}')">
+            <div class="calendar-day-number">${day}</div>`;
+        
+        // Mostra eventi (max 3, poi "+X altri")
+        // Su mobile mostra solo numero, su desktop mostra testo
+        if (dayEvents.length > 0) {
+            if (dayEvents.length === 1) {
+                // Un solo evento: mostra sempre il testo
+                const event = dayEvents[0];
+                html += `<div class="calendar-event ${event.colore || 'blue'}" 
+                         onclick="event.stopPropagation(); openEventDetails(${event.id})" 
+                         title="${event.titolo}${event.ora ? ' - ' + event.ora : ''}">
+                    <span class="hidden sm:inline">${event.ora ? event.ora + ' ' : ''}${event.titolo}</span>
+                    <span class="sm:hidden">${event.titolo.substring(0, 8)}${event.titolo.length > 8 ? '...' : ''}</span>
+                </div>`;
+            } else {
+                // Più eventi: mostra i primi 2 su desktop, solo numero su mobile
+                dayEvents.slice(0, 2).forEach(event => {
+                    html += `<div class="calendar-event ${event.colore || 'blue'}" 
+                             onclick="event.stopPropagation(); openEventDetails(${event.id})" 
+                             title="${event.titolo}${event.ora ? ' - ' + event.ora : ''}">
+                        <span class="hidden sm:inline">${event.ora ? event.ora + ' ' : ''}${event.titolo}</span>
+                        <span class="sm:hidden">${event.titolo.substring(0, 6)}...</span>
+                    </div>`;
+                });
+                
+                if (dayEvents.length > 2) {
+                    html += `<div class="calendar-event blue" style="opacity: 0.7;" onclick="event.stopPropagation(); openDayEvents('${dateStr}')">
+                        <span class="hidden sm:inline">+${dayEvents.length - 2} altri</span>
+                        <span class="sm:hidden">+${dayEvents.length - 2}</span>
+                    </div>`;
+                }
+            }
+        }
+        
+        html += `</div>`;
+    }
+    
+    // Giorni del mese successivo (per riempire l'ultima settimana)
+    const totalCells = startingDayOfWeek + daysInMonth;
+    const remainingCells = 42 - totalCells; // 6 settimane * 7 giorni
+    for (let day = 1; day <= remainingCells; day++) {
+        html += `<div class="calendar-day other-month">
+            <div class="calendar-day-number">${day}</div>
+        </div>`;
+    }
+    
+    grid.innerHTML = html;
+}
+
+function prevMonth() {
+    currentMonth--;
+    if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+    }
+    // Debounce per evitare render multipli rapidi
+    clearTimeout(renderCalendarTimeout);
+    renderCalendarTimeout = setTimeout(() => renderCalendar(), 50);
+}
+
+function nextMonth() {
+    currentMonth++;
+    if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+    }
+    // Debounce per evitare render multipli rapidi
+    clearTimeout(renderCalendarTimeout);
+    renderCalendarTimeout = setTimeout(() => renderCalendar(), 50);
+}
+
+function goToToday() {
+    const today = new Date();
+    currentMonth = today.getMonth();
+    currentYear = today.getFullYear();
+    clearTimeout(renderCalendarTimeout);
+    renderCalendarTimeout = setTimeout(() => renderCalendar(), 50);
+}
+
+function openDayEvents(dateStr) {
+    selectedDate = dateStr;
+    const events = calendarioData.filter(e => e.data === dateStr);
+    
+    if (events.length === 0) {
+        openNewAppuntamentoForm(dateStr);
+    } else {
+        // Mostra modal con lista eventi
+        const modal = document.getElementById('eventiGiornoModal');
+        const title = document.getElementById('eventiGiornoTitle');
+        const list = document.getElementById('eventiGiornoList');
+        
+        const dateObj = new Date(dateStr);
+        const dateFormatted = dateObj.toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        title.textContent = `Eventi del ${dateFormatted}`;
+        
+        list.innerHTML = events.map(e => `
+            <div class="p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-2 mb-1">
+                            <div class="w-3 h-3 rounded-full calendar-event ${e.colore || 'blue'} flex-shrink-0"></div>
+                            <h4 class="font-semibold text-sm sm:text-base text-gray-900 truncate">${e.titolo}</h4>
+                        </div>
+                        ${e.ora ? `<p class="text-xs sm:text-sm text-gray-600">🕐 ${e.ora}</p>` : ''}
+                        ${e.descrizione ? `<p class="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">${e.descrizione}</p>` : ''}
+                    </div>
+                    <div class="flex space-x-1 sm:space-x-2 ml-2 flex-shrink-0">
+                        <button onclick="editAppuntamento(${e.id})" class="text-blue-600 hover:text-blue-800 p-1 sm:p-2">
+                            <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                        <button onclick="deleteAppuntamento(${e.id})" class="text-red-600 hover:text-red-800 p-1 sm:p-2">
+                            <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeEventiGiornoModal() {
+    document.getElementById('eventiGiornoModal').classList.add('hidden');
+    selectedDate = null;
+}
+
+function openEventDetails(eventId) {
+    editAppuntamento(eventId);
+}
+
+function openNewAppuntamentoForm(dateStr = null) {
+    selectedDate = dateStr;
+    const modal = document.getElementById('eventoFormModal');
+    const form = document.getElementById('eventoForm');
+    const title = document.getElementById('eventoFormTitle');
+    
+    title.textContent = 'Nuovo Evento';
+    form.reset();
+    document.getElementById('eventoId').value = '';
+    
+    if (dateStr) {
+        document.getElementById('eventoData').value = dateStr;
+    } else {
+        document.getElementById('eventoData').value = new Date().toISOString().split('T')[0];
+    }
+    
+    document.getElementById('eventoColore').value = 'blue';
+    
+    modal.classList.remove('hidden');
+}
+
+function closeEventoFormModal() {
+    document.getElementById('eventoFormModal').classList.add('hidden');
+    selectedDate = null;
+}
+
+function editAppuntamento(id) {
+    const event = calendarioData.find(e => e.id === id);
+    if (!event) return;
+    
+    const modal = document.getElementById('eventoFormModal');
+    const form = document.getElementById('eventoForm');
+    const title = document.getElementById('eventoFormTitle');
+    
+    title.textContent = 'Modifica Evento';
+    document.getElementById('eventoId').value = id;
+    document.getElementById('eventoTitolo').value = event.titolo;
+    document.getElementById('eventoData').value = event.data;
+    document.getElementById('eventoOra').value = event.ora || '';
+    document.getElementById('eventoDescrizione').value = event.descrizione || '';
+    document.getElementById('eventoColore').value = event.colore || 'blue';
+    
+    modal.classList.remove('hidden');
+}
+
+function deleteAppuntamento(id) {
+    const event = calendarioData.find(e => e.id === id);
+    if (!event) return;
+    
+    if (confirm(`Eliminare l'evento "${event.titolo}"?`)) {
+        fetch(`/api/organizza/calendario/${id}`, {method: 'DELETE'})
+            .then(() => {
+                loadCalendario();
+                closeEventiGiornoModal();
+            });
+    }
+}
+
+// Gestione submit form evento
+document.getElementById('eventoForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const id = document.getElementById('eventoId').value;
+    const titolo = document.getElementById('eventoTitolo').value;
+    const data = document.getElementById('eventoData').value;
+    const ora = document.getElementById('eventoOra').value || null;
+    const descrizione = document.getElementById('eventoDescrizione').value || null;
+    const colore = document.getElementById('eventoColore').value;
+    
+    const url = id ? `/api/organizza/calendario/${id}` : '/api/organizza/calendario';
+    const method = id ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({titolo, data, ora, descrizione, colore})
+    })
+    .then(r => r.json())
+    .then(() => {
+        closeEventoFormModal();
+        closeEventiGiornoModal();
+        loadCalendario();
+    })
+    .catch(error => {
+        console.error('Errore salvataggio evento:', error);
+        alert('Errore nel salvataggio dell\'evento');
+    });
+});
+
+// ============================================
+// TO-DO LIST AVANZATA
+// ============================================
+let currentEditingTodoId = null;
+let currentCompletingTodoId = null;
+
+async function loadTodo() {
+    try {
+        const params = new URLSearchParams();
+        const filtroStato = document.getElementById('filtroStato')?.value || 'tutti';
+        const filtroPriorita = document.getElementById('filtroPriorita')?.value || '';
+        const filtroOperatore = document.getElementById('filtroOperatore')?.value || '';
+        const filtroCategoria = document.getElementById('filtroCategoria')?.value || '';
+        
+        if (filtroStato !== 'tutti') params.append('stato', filtroStato);
+        if (filtroPriorita) params.append('priorita', filtroPriorita);
+        if (filtroOperatore) params.append('operatore', filtroOperatore);
+        if (filtroCategoria) params.append('categoria', filtroCategoria);
+        
+        const response = await fetch(`/api/organizza/todo?${params.toString()}`);
+        todoData = await response.json();
+        updateTodoPreview();
+        renderTodoList();
+    } catch (error) {
+        console.error('Errore caricamento todo:', error);
+    }
+}
+
+// Funzione rimossa: assegnazione operatore ora è manuale (campo testo)
+
+function updateTodoPreview() {
+    const preview = document.getElementById('todoPreview');
+    if (!preview) return;
+    
+    const attivi = todoData.filter(t => !t.completato);
+    const completati = todoData.filter(t => t.completato && !t.confermato);
+    const confermati = todoData.filter(t => t.confermato);
+    
+    if (attivi.length === 0 && completati.length === 0) {
+        preview.innerHTML = '<p class="text-green-600">✅ Tutti i task completati!</p>';
+    } else {
+        let html = '';
+        if (attivi.length > 0) html += `<p class="text-orange-600">⚠️ ${attivi.length} task attivi</p>`;
+        if (completati.length > 0) html += `<p class="text-blue-600">✓ ${completati.length} in attesa di conferma</p>`;
+        preview.innerHTML = html || '<p>Nessun task</p>';
+    }
+}
+
+function openTodoModal() {
+    document.getElementById('todoModal').classList.remove('hidden');
+    loadTodo();
+}
+
+function closeTodoModal() {
+    document.getElementById('todoModal').classList.add('hidden');
+    // Reset filtri
+    const filtroStato = document.getElementById('filtroStato');
+    const filtroPriorita = document.getElementById('filtroPriorita');
+    const filtroOperatore = document.getElementById('filtroOperatore');
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    if (filtroStato) filtroStato.value = 'tutti';
+    if (filtroPriorita) filtroPriorita.value = '';
+    if (filtroOperatore) filtroOperatore.value = '';
+    if (filtroCategoria) filtroCategoria.value = '';
+}
+
+function applyTodoFilters() {
+    loadTodo();
+}
+
+function renderTodoList() {
+    const list = document.getElementById('todoList');
+    if (!list) return;
+    
+    if (todoData.length === 0) {
+        list.innerHTML = '<div class="text-center py-12"><p class="text-gray-500 text-lg">Nessun task trovato</p></div>';
+        return;
+    }
+    
+    // Raggruppa per stato
+    const attivi = todoData.filter(t => !t.completato);
+    const completati = todoData.filter(t => t.completato && !t.confermato);
+    const confermati = todoData.filter(t => t.confermato);
+    
+    let html = '';
+    
+    if (attivi.length > 0) {
+        html += `<div class="mb-6"><h3 class="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">📋 Attivi (${attivi.length})</h3>`;
+        html += attivi.map(t => renderTodoItem(t)).join('');
+        html += '</div>';
+    }
+    
+    if (completati.length > 0) {
+        html += `<div class="mb-6"><h3 class="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">⏳ In attesa di conferma (${completati.length})</h3>`;
+        html += completati.map(t => renderTodoItem(t)).join('');
+        html += '</div>';
+    }
+    
+    if (confermati.length > 0) {
+        html += `<div class="mb-6"><h3 class="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">✅ Confermati (${confermati.length})</h3>`;
+        html += confermati.map(t => renderTodoItem(t)).join('');
+        html += '</div>';
+    }
+    
+    list.innerHTML = html;
+}
+
+function renderTodoItem(t) {
+    const isScaduto = t.scadenza && new Date(t.scadenza) < new Date() && !t.completato;
+    const prioritaBadge = getPrioritaBadge(t.priorita);
+    const categoriaBadge = t.categoria ? `<span class="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">${escapeHtml(t.categoria)}</span>` : '';
+    const operatoreBadge = t.operatore_assegnato ? `<span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">👤 ${escapeHtml(t.operatore_assegnato)}</span>` : '';
+    const scadenzaBadge = t.scadenza ? `<span class="text-xs px-2 py-1 rounded-full ${isScaduto ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}">📅 ${formatDate(t.scadenza)}</span>` : '';
+    
+    let statusIcons = '';
+    if (t.confermato) {
+        statusIcons = '<span class="text-green-600 text-lg">✅</span>';
+    } else if (t.completato) {
+        statusIcons = '<span class="text-blue-600 text-lg">✓</span>';
+    }
+    
+    const currentUser = '{{ current_user.username }}';
+    const canEdit = !t.completato;
+    const canConferma = t.completato && !t.confermato && t.creato_da === currentUser;
+    const canDelete = t.creato_da === currentUser;
+    
+    return `
+        <div class="p-4 sm:p-5 border border-gray-200 rounded-xl hover:shadow-md transition-all ${t.completato ? 'bg-gray-50' : 'bg-white'} ${isScaduto ? 'border-red-300' : ''}">
+            <div class="flex items-start gap-3 sm:gap-4">
+                <div class="flex-shrink-0 mt-1">
+                    ${!t.completato ? `
+                        <button onclick="completaTodo(${t.id})" class="w-6 h-6 border-2 border-gray-300 rounded hover:border-green-500 transition-colors flex items-center justify-center">
+                            <svg class="w-4 h-4 text-green-500 hidden" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                    ` : statusIcons}
+                </div>
+                
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                        <h4 class="font-semibold text-gray-900 ${t.completato ? 'line-through text-gray-500' : ''} text-sm sm:text-base">${escapeHtml(t.titolo)}</h4>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            ${t.confermato ? '<span class="text-xs text-green-600 font-medium">Confermato</span>' : ''}
+                            ${t.completato && !t.confermato ? '<span class="text-xs text-blue-600 font-medium">Completato</span>' : ''}
+                        </div>
+                    </div>
+                    
+                    ${t.descrizione ? `<p class="text-sm text-gray-600 mt-1 mb-3 whitespace-pre-line">${escapeHtml(t.descrizione)}</p>` : ''}
+                    
+                    <div class="flex flex-wrap items-center gap-2 mb-3">
+                        ${prioritaBadge}
+                        ${categoriaBadge}
+                        ${operatoreBadge}
+                        ${scadenzaBadge}
+                    </div>
+                    
+                    ${t.completato && t.note_completamento ? `
+                        <div class="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p class="text-xs font-medium text-blue-800 mb-1">Note completamento:</p>
+                            <p class="text-sm text-blue-700 whitespace-pre-line">${escapeHtml(t.note_completamento)}</p>
+                            ${t.completato_da ? `<p class="text-xs text-blue-600 mt-1">Completato da: ${escapeHtml(t.completato_da)}</p>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${t.confermato && t.confermato_da ? `
+                        <div class="mt-2 text-xs text-green-600">
+                            Confermato da: ${escapeHtml(t.confermato_da)} ${t.data_conferma ? `il ${formatDateTime(t.data_conferma)}` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="flex flex-col gap-2 flex-shrink-0">
+                    ${canEdit ? `
+                        <button onclick="editTodo(${t.id})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Modifica">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                    ` : ''}
+                    
+                    ${canConferma ? `
+                        <button onclick="confermaTodo(${t.id})" class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Conferma">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </button>
+                    ` : ''}
+                    
+                    ${canDelete ? `
+                        <button onclick="deleteTodo(${t.id})" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Elimina">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getPrioritaBadge(p) {
+    const badges = {
+        'alta': '<span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 font-medium">🔴 Alta</span>',
+        'media': '<span class="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium">🟡 Media</span>',
+        'bassa': '<span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">🟢 Bassa</span>'
+    };
+    return badges[p] || '<span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">Priorità</span>';
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatDateTime(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function openNewTodoForm() {
+    currentEditingTodoId = null;
+    document.getElementById('todoFormTitle').textContent = 'Nuovo Task';
+    document.getElementById('todoForm').reset();
+    document.getElementById('todoFormModal').classList.remove('hidden');
+}
+
+function editTodo(id) {
+    const todo = todoData.find(t => t.id === id);
+    if (!todo) return;
+    
+    currentEditingTodoId = id;
+    document.getElementById('todoFormTitle').textContent = 'Modifica Task';
+    document.getElementById('todoTitolo').value = todo.titolo || '';
+    document.getElementById('todoDescrizione').value = todo.descrizione || '';
+    document.getElementById('todoPriorita').value = todo.priorita || 'media';
+    document.getElementById('todoCategoria').value = todo.categoria || '';
+    document.getElementById('todoScadenza').value = todo.scadenza || '';
+    document.getElementById('todoOperatore').value = todo.operatore_assegnato || '';
+    document.getElementById('todoFormModal').classList.remove('hidden');
+}
+
+function closeTodoFormModal() {
+    document.getElementById('todoFormModal').classList.add('hidden');
+    currentEditingTodoId = null;
+}
+
+function saveTodo(event) {
+    event.preventDefault();
+    
+    const data = {
+        titolo: document.getElementById('todoTitolo').value,
+        descrizione: document.getElementById('todoDescrizione').value,
+        priorita: document.getElementById('todoPriorita').value,
+        categoria: document.getElementById('todoCategoria').value || null,
+        scadenza: document.getElementById('todoScadenza').value || null,
+        operatore_assegnato: document.getElementById('todoOperatore').value || null
+    };
+    
+    const url = currentEditingTodoId ? `/api/organizza/todo/${currentEditingTodoId}` : '/api/organizza/todo';
+    const method = currentEditingTodoId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(() => {
+        closeTodoFormModal();
+        loadTodo();
+    })
+    .catch(error => {
+        console.error('Errore salvataggio task:', error);
+        alert('Errore nel salvataggio del task');
+    });
+}
+
+function completaTodo(id) {
+    currentCompletingTodoId = id;
+    document.getElementById('todoNoteCompletamento').value = '';
+    document.getElementById('todoCompletaModal').classList.remove('hidden');
+}
+
+function closeTodoCompletaModal() {
+    document.getElementById('todoCompletaModal').classList.add('hidden');
+    currentCompletingTodoId = null;
+}
+
+function confirmCompletaTodo(event) {
+    event.preventDefault();
+    
+    const note = document.getElementById('todoNoteCompletamento').value;
+    
+    fetch(`/api/organizza/todo/${currentCompletingTodoId}/completa`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({note_completamento: note})
+    })
+    .then(r => r.json())
+    .then(() => {
+        closeTodoCompletaModal();
+        loadTodo();
+    })
+    .catch(error => {
+        console.error('Errore completamento task:', error);
+        alert('Errore nel completamento del task');
+    });
+}
+
+function confermaTodo(id) {
+    if (!confirm('Confermare il completamento di questo task?')) return;
+    
+    fetch(`/api/organizza/todo/${id}/conferma`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(() => {
+        loadTodo();
+    })
+    .catch(error => {
+        console.error('Errore conferma task:', error);
+        alert('Errore nella conferma del task');
+    });
+}
+
+function deleteTodo(id) {
+    const todo = todoData.find(t => t.id === id);
+    if (!confirm(`Eliminare il task "${todo.titolo}"?`)) return;
+    
+    fetch(`/api/organizza/todo/${id}`, {method: 'DELETE'})
+        .then(() => {
+            loadTodo();
+        })
+        .catch(error => {
+            console.error('Errore eliminazione task:', error);
+            alert('Errore nell\'eliminazione del task');
+        });
+}
+
+// ============================================
+// NOTE
+// ============================================
+async function loadNote() {
+    try {
+        const response = await fetch('/api/organizza/note');
+        const data = await response.json();
+        noteData = data.contenuto || '';
+        document.getElementById('noteTextarea').value = noteData;
+        updateNotePreview();
+    } catch (error) {
+        console.error('Errore caricamento note:', error);
+    }
+}
+
+function updateNotePreview() {
+    const preview = document.getElementById('notePreview');
+    if (!noteData || noteData.trim() === '') {
+        preview.innerHTML = '<p>Nessuna nota</p>';
+    } else {
+        const previewText = noteData.substring(0, 100);
+        preview.innerHTML = `<p>${previewText}${noteData.length > 100 ? '...' : ''}</p>`;
+    }
+}
+
+function openNoteModal() {
+    document.getElementById('noteModal').classList.remove('hidden');
+    loadNote();
+}
+
+function closeNoteModal() {
+    document.getElementById('noteModal').classList.add('hidden');
+}
+
+function saveNoteDebounced() {
+    clearTimeout(saveNoteTimeout);
+    saveNoteTimeout = setTimeout(() => {
+        const contenuto = document.getElementById('noteTextarea').value;
+        noteData = contenuto;
+        updateNotePreview();
+        
+        fetch('/api/organizza/note', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({contenuto})
+        });
+    }, 1000); // Salva dopo 1 secondo di inattività
+}
+
+// ============================================
+// ANNUNCI URGENTI
+// ============================================
+async function loadAnnunci() {
+    try {
+        const response = await fetch('/api/organizza/annunci');
+        annunciData = await response.json();
+        updateAnnunciPreview();
+        updateAnnunciNavbar();
+    } catch (error) {
+        console.error('Errore caricamento annunci:', error);
+    }
+}
+
+async function loadAnnunciManage() {
+    try {
+        const response = await fetch('/api/organizza/annunci?all=1');
+        annunciManageData = await response.json();
+        renderAnnunciList();
+        updateAnnunciStats();
+    } catch (error) {
+        console.error('Errore caricamento annunci (gestione):', error);
+    }
+}
+
+function updateAnnunciPreview() {
+    const preview = document.getElementById('annunciPreview');
+    if (!preview) return;
+    if (!annunciData.length) {
+        preview.innerHTML = '<p>Nessun annuncio</p>';
+        return;
+    }
+    const primary = annunciData[0];
+    preview.innerHTML = `
+        <p class="font-semibold text-red-600">${escapeHtml(primary.titolo)}</p>
+        <p class="text-xs text-gray-500 mt-1 line-clamp-2">${escapeHtml(primary.messaggio)}</p>
+        ${annunciData.length > 1 ? `<p class="text-xs text-gray-400 mt-2">+${annunciData.length - 1} altro/i</p>` : ''}
+    `;
+}
+
+function updateAnnunciNavbar() {
+    const navbar = document.getElementById('annunciNavbar');
+    const content = document.getElementById('annunciContent');
+    if (!navbar || !content) return;
+    
+    if (!annunciData.length) {
+        navbar.classList.add('hidden');
+        content.textContent = '';
+        return;
+    }
+    
+    navbar.classList.remove('hidden');
+    const annunciText = annunciData.map(a => `${a.titolo}: ${a.messaggio}`).join(' • ');
+    content.textContent = annunciText;
+}
+
+function changeAnnunciFilter(value) {
+    annunciFilterStatus = value;
+    renderAnnunciList();
+}
+
+function openAnnunciModal() {
+    document.getElementById('annunciModal').classList.remove('hidden');
+    const filtroSelect = document.getElementById('annunciFiltroStato');
+    annunciFilterStatus = 'tutti';
+    if (filtroSelect) filtroSelect.value = 'tutti';
+    loadAnnunciManage();
+}
+
+function closeAnnunciModal() {
+    document.getElementById('annunciModal').classList.add('hidden');
+}
+
+function renderAnnunciList() {
+    const list = document.getElementById('annunciList');
+    if (!list) return;
+    
+    if (!annunciManageData.length) {
+        list.innerHTML = '<div class="text-center py-12 text-gray-500">Nessun annuncio creato</div>';
+        return;
+    }
+    
+    const now = new Date();
+    const filtered = annunciManageData.filter(a => {
+        const isScaduto = isAnnuncioScaduto(a, now);
+        const isAttivo = a.attivo && !isScaduto;
+        if (annunciFilterStatus === 'attivi') return isAttivo;
+        if (annunciFilterStatus === 'inattivi') return !a.attivo;
+        if (annunciFilterStatus === 'scaduti') return a.attivo && isScaduto;
+        return true;
+    });
+    
+    if (!filtered.length) {
+        list.innerHTML = '<div class="text-center py-12 text-gray-500">Nessun annuncio per il filtro selezionato</div>';
+        return;
+    }
+    
+    list.innerHTML = filtered.map(renderAnnuncioCard).join('');
+}
+
+function updateAnnunciStats() {
+    const stats = document.getElementById('annunciStats');
+    if (!stats) return;
+    
+    if (!annunciManageData.length) {
+        stats.innerHTML = '<span class="text-sm text-gray-500">Nessun annuncio creato finora.</span>';
+        return;
+    }
+    
+    const now = new Date();
+    const attivi = annunciManageData.filter(a => a.attivo && !isAnnuncioScaduto(a, now)).length;
+    const scaduti = annunciManageData.filter(a => a.attivo && isAnnuncioScaduto(a, now)).length;
+    const inattivi = annunciManageData.filter(a => !a.attivo).length;
+    
+    stats.innerHTML = `
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-medium">Attivi: ${attivi}</span>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium">Scaduti: ${scaduti}</span>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 font-medium">Disattivati: ${inattivi}</span>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">Totale: ${annunciManageData.length}</span>
+    `;
+}
+
+function isAnnuncioScaduto(annuncio, referenceDate = new Date()) {
+    if (!annuncio.scadenza) return false;
+    return new Date(annuncio.scadenza) <= referenceDate;
+}
+
+function renderAnnuncioCard(annuncio) {
+    const now = new Date();
+    const isScaduto = isAnnuncioScaduto(annuncio, now);
+    const isAttivo = annuncio.attivo && !isScaduto;
+    const cardClasses = isAttivo ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white';
+    const statusBadge = getAnnuncioStatusBadge(annuncio, isAttivo, isScaduto);
+    const scadenzaBadge = getAnnuncioScadenzaBadge(annuncio, isScaduto);
+    const toggleLabel = annuncio.attivo ? 'Disattiva' : 'Attiva';
+    const toggleClass = annuncio.attivo ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50';
+    
+    return `
+        <div class="p-4 sm:p-5 border rounded-xl transition-shadow hover:shadow-md ${cardClasses}">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+                <div class="flex-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        ${statusBadge}
+                        ${scadenzaBadge}
+                    </div>
+                    <h4 class="text-lg font-semibold text-gray-900">${escapeHtml(annuncio.titolo)}</h4>
+                    <p class="text-sm text-gray-700 whitespace-pre-line mt-2">${escapeHtml(annuncio.messaggio)}</p>
+                    <div class="text-xs text-gray-500 mt-3">
+                        Creato da <span class="font-medium text-gray-700">${escapeHtml(annuncio.creato_da)}</span>
+                        ${annuncio.created_at ? `• ${formatDateTime(annuncio.created_at)}` : ''}
+                    </div>
+                </div>
+                <div class="flex flex-row sm:flex-col gap-2 flex-shrink-0">
+                    <button onclick="toggleAnnuncio(${annuncio.id}, ${annuncio.attivo ? 'false' : 'true'})" class="px-3 py-2 rounded-lg border border-gray-200 bg-white ${toggleClass} transition-colors text-sm font-medium">
+                        ${toggleLabel}
+                    </button>
+                    <button onclick="editAnnuncio(${annuncio.id})" class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-blue-600 hover:bg-blue-50 transition-colors text-sm font-medium">
+                        Modifica
+                    </button>
+                    <button onclick="deleteAnnuncio(${annuncio.id})" class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-red-600 hover:bg-red-50 transition-colors text-sm font-medium">
+                        Elimina
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getAnnuncioStatusBadge(annuncio, isAttivo, isScaduto) {
+    if (isAttivo) {
+        return '<span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-red-200 text-red-800">Attivo</span>';
+    }
+    if (isScaduto && annuncio.attivo) {
+        return '<span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">Scaduto</span>';
+    }
+    return '<span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Disattivato</span>';
+}
+
+function getAnnuncioScadenzaBadge(annuncio, isScaduto) {
+    if (!annuncio.scadenza) {
+        return '<span class="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">Nessuna scadenza</span>';
+    }
+    const label = isScaduto ? 'Scaduto il' : 'Scade il';
+    return `<span class="inline-flex items-center px-2 py-1 text-xs ${isScaduto ? 'bg-yellow-100 text-yellow-700' : 'bg-white text-gray-700 border border-gray-300'} rounded-full">${label} ${formatDateTime(annuncio.scadenza)}</span>`;
+}
+
+function toDatetimeLocalValue(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+    return localISOTime;
+}
+
+function openNewAnnuncioForm() {
+    currentAnnuncioEditingId = null;
+    document.getElementById('annuncioFormTitle').textContent = 'Nuovo Annuncio';
+    document.getElementById('annuncioForm').reset();
+    document.getElementById('annuncioScadenza').value = '';
+    document.getElementById('annuncioAttivoGroup').classList.add('hidden');
+    document.getElementById('annuncioAttivo').checked = true;
+    hideAnnuncioFormError();
+    document.getElementById('annuncioFormModal').classList.remove('hidden');
+}
+
+function editAnnuncio(id) {
+    const annuncio = annunciManageData.find(a => a.id === id);
+    if (!annuncio) return;
+    currentAnnuncioEditingId = id;
+    document.getElementById('annuncioFormTitle').textContent = 'Modifica Annuncio';
+    document.getElementById('annuncioTitolo').value = annuncio.titolo || '';
+    document.getElementById('annuncioMessaggio').value = annuncio.messaggio || '';
+    document.getElementById('annuncioScadenza').value = toDatetimeLocalValue(annuncio.scadenza);
+    document.getElementById('annuncioAttivoGroup').classList.remove('hidden');
+    document.getElementById('annuncioAttivo').checked = !!annuncio.attivo;
+    hideAnnuncioFormError();
+    document.getElementById('annuncioFormModal').classList.remove('hidden');
+}
+
+function closeAnnuncioFormModal() {
+    document.getElementById('annuncioFormModal').classList.add('hidden');
+    document.getElementById('annuncioForm').reset();
+    document.getElementById('annuncioScadenza').value = '';
+    document.getElementById('annuncioAttivoGroup').classList.add('hidden');
+    document.getElementById('annuncioAttivo').checked = true;
+    hideAnnuncioFormError();
+    currentAnnuncioEditingId = null;
+}
+
+function hideAnnuncioFormError() {
+    const errorEl = document.getElementById('annuncioFormError');
+    if (!errorEl) return;
+    errorEl.classList.add('hidden');
+    errorEl.textContent = '';
+}
+
+function showAnnuncioFormError(message) {
+    const errorEl = document.getElementById('annuncioFormError');
+    if (!errorEl) return;
+    errorEl.textContent = message;
+    errorEl.classList.remove('hidden');
+}
+
+async function saveAnnuncio(event) {
+    event.preventDefault();
+    hideAnnuncioFormError();
+    
+    const titolo = document.getElementById('annuncioTitolo').value.trim();
+    const messaggio = document.getElementById('annuncioMessaggio').value.trim();
+    const scadenzaValue = document.getElementById('annuncioScadenza').value;
+    const attivo = document.getElementById('annuncioAttivo').checked;
+    
+    if (!titolo || !messaggio) {
+        showAnnuncioFormError('Titolo e messaggio sono obbligatori.');
+        return;
+    }
+    
+    const payload = {
+        titolo,
+        messaggio,
+        scadenza: scadenzaValue ? new Date(scadenzaValue).toISOString() : null
+    };
+    if (currentAnnuncioEditingId !== null) {
+        payload.attivo = attivo;
+    }
+    
+    const url = currentAnnuncioEditingId !== null
+        ? `/api/organizza/annunci/${currentAnnuncioEditingId}`
+        : '/api/organizza/annunci';
+    const method = currentAnnuncioEditingId !== null ? 'PUT' : 'POST';
+    
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            showAnnuncioFormError(errorData.error || 'Errore nel salvataggio dell\'annuncio');
+            return;
+        }
+        await response.json();
+        closeAnnuncioFormModal();
+        await loadAnnunci();
+        await loadAnnunciManage();
+    } catch (error) {
+        console.error('Errore salvataggio annuncio:', error);
+        showAnnuncioFormError('Errore inatteso durante il salvataggio');
+    }
+}
+
+async function toggleAnnuncio(id, attivo) {
+    try {
+        const response = await fetch(`/api/organizza/annunci/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({attivo})
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Errore toggle annuncio:', errorData);
+            return;
+        }
+        await response.json();
+        await loadAnnunci();
+        await loadAnnunciManage();
+    } catch (error) {
+        console.error('Errore toggle annuncio:', error);
+    }
+}
+
+async function deleteAnnuncio(id) {
+    const annuncio = annunciManageData.find(a => a.id === id);
+    const titolo = annuncio ? annuncio.titolo : 'questo annuncio';
+    if (!confirm(`Eliminare "${titolo}"?`)) return;
+    try {
+        const response = await fetch(`/api/organizza/annunci/${id}`, {method: 'DELETE'});
+        if (!response.ok) {
+            console.error('Errore eliminazione annuncio');
+            return;
+        }
+        await loadAnnunci();
+        await loadAnnunciManage();
+    } catch (error) {
+        console.error('Errore eliminazione annuncio:', error);
+    }
+}
+
+// ============================================
+// INIZIALIZZAZIONE
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    loadCalendario();
+    loadTodo();
+    loadNote();
+    loadAnnunci();
+    
+    // Ricarica annunci ogni 30 secondi
+    setInterval(loadAnnunci, 30000);
+});
+</script>
+{% endblock %}

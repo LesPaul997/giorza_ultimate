@@ -126,7 +126,7 @@ class ModifiedOrderLine(db.Model):
     seriale = db.Column(db.String(20), nullable=False)
     codice_articolo = db.Column(db.String(50), nullable=False)
     descrizione_articolo = db.Column(db.String(200), nullable=True)
-    descrizione_supplementare = db.Column(db.String(200), nullable=True)
+    descrizione_supplementare = db.Column(db.Text, nullable=True)
     quantita = db.Column(db.Float, nullable=False)
     unita_misura = db.Column(db.String(10), nullable=False)
     unita_misura_2 = db.Column(db.String(10), nullable=True)
@@ -272,3 +272,81 @@ class PartialOrderResidue(db.Model):
 
     def __repr__(self) -> str:
         return f'<PartialResidue {self.seriale} {self.reparto} {self.codice_articolo} residuo={self.residuo_quantita}>'
+
+
+# ============================================
+# MODELLI PER "ORGANIZZA GIORNATA"
+# ============================================
+
+class CalendarioAppuntamento(db.Model):
+    """Appuntamenti manuali nel calendario"""
+    __tablename__ = 'calendario_appuntamenti'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    titolo = db.Column(db.String(200), nullable=False)
+    descrizione = db.Column(db.Text, nullable=True)
+    data = db.Column(db.Date, nullable=False, index=True)  # Indice per query veloci
+    ora = db.Column(db.Time, nullable=True)
+    colore = db.Column(db.String(20), default='blue')  # blue, red, green, yellow, purple
+    creato_da = db.Column(db.String(80), nullable=False)  # username
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<CalendarioAppuntamento {self.titolo} {self.data}>'
+
+
+class TodoItem(db.Model):
+    """Task nella to-do list avanzata"""
+    __tablename__ = 'todo_items'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    titolo = db.Column(db.String(200), nullable=False)
+    descrizione = db.Column(db.Text, nullable=True)
+    completato = db.Column(db.Boolean, default=False, index=True)  # Indice per filtri
+    confermato = db.Column(db.Boolean, default=False)  # Flag di conferma (doppio check)
+    priorita = db.Column(db.String(20), default='media')  # alta, media, bassa
+    categoria = db.Column(db.String(50), nullable=True)  # Categoria/tag del task
+    scadenza = db.Column(db.Date, nullable=True, index=True)  # Indice per filtri scadenza
+    operatore_assegnato = db.Column(db.String(80), nullable=True, index=True)  # Operatore assegnato al task
+    creato_da = db.Column(db.String(80), nullable=False, index=True)  # Chi ha creato il task
+    completato_da = db.Column(db.String(80), nullable=True)  # Chi ha completato il task
+    confermato_da = db.Column(db.String(80), nullable=True)  # Chi ha confermato il task
+    data_completamento = db.Column(db.DateTime, nullable=True)  # Quando è stato completato
+    data_conferma = db.Column(db.DateTime, nullable=True)  # Quando è stato confermato
+    note_completamento = db.Column(db.Text, nullable=True)  # Note al completamento
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    ordine = db.Column(db.Integer, default=0)  # Per ordinare i task
+    
+    def __repr__(self):
+        return f'<TodoItem {self.titolo} {self.completato}>'
+
+
+class NoteAppunto(db.Model):
+    """Note/appunti del cassiere (foglio unico)"""
+    __tablename__ = 'note_appunti'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    contenuto = db.Column(db.Text, nullable=True)  # Testo completo delle note
+    creato_da = db.Column(db.String(80), nullable=False, unique=True, index=True)  # Un solo foglio per utente, indice per query veloci
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<NoteAppunto {self.creato_da}>'
+
+
+class AnnuncioUrgente(db.Model):
+    """Annunci urgenti che scorrono nella navbar"""
+    __tablename__ = 'annunci_urgenti'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    titolo = db.Column(db.String(200), nullable=False)
+    messaggio = db.Column(db.Text, nullable=False)
+    attivo = db.Column(db.Boolean, default=True, index=True)  # Indice per filtri attivi
+    creato_da = db.Column(db.String(80), nullable=False)  # username
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)  # Indice per ordinamento
+    scadenza = db.Column(db.DateTime, nullable=True, index=True)  # Indice per query scadenza
+    
+    def __repr__(self):
+        return f'<AnnuncioUrgente {self.titolo} {self.attivo}>'
