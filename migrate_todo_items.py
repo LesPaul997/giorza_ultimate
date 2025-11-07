@@ -9,37 +9,59 @@ from sqlalchemy import text
 def migrate_todo_items():
     """Aggiunge le nuove colonne alla tabella todo_items"""
     with app.app_context():
-        print("🔄 Aggiornamento tabella todo_items...")
-        
+        dialect = db.engine.dialect.name
+        print(f"🔄 Aggiornamento tabella todo_items... (dialetto: {dialect})")
+
         try:
             with db.engine.connect() as conn:
                 # Verifica se la tabella esiste
-                result = conn.execute(text("""
-                    SELECT name FROM sqlite_master 
-                    WHERE type='table' AND name='todo_items'
-                """))
-                
-                if not result.fetchone():
+                if dialect == 'sqlite':
+                    result = conn.execute(text("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name='todo_items'
+                    """))
+                    table_exists = bool(result.fetchone())
+                elif dialect == 'postgresql':
+                    result = conn.execute(text("SELECT to_regclass('public.todo_items')"))
+                    table_exists = bool(result.scalar())
+                else:
+                    result = conn.execute(text("""
+                        SELECT table_name FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'todo_items'
+                    """))
+                    table_exists = bool(result.fetchone())
+
+                if not table_exists:
                     print("⚠️  Tabella todo_items non esiste. Creazione...")
                     db.create_all()
                     print("✅ Tabella todo_items creata")
                     return
                 
                 # Lista delle colonne da aggiungere
+                datetime_type = 'DATETIME' if dialect == 'sqlite' else 'TIMESTAMP'
+                bool_default = 'BOOLEAN DEFAULT 0' if dialect == 'sqlite' else 'BOOLEAN DEFAULT FALSE'
+
                 colonne_da_aggiungere = [
-                    ('confermato', 'BOOLEAN DEFAULT 0'),
+                    ('confermato', bool_default),
                     ('categoria', 'VARCHAR(50)'),
                     ('operatore_assegnato', 'VARCHAR(80)'),
                     ('completato_da', 'VARCHAR(80)'),
                     ('confermato_da', 'VARCHAR(80)'),
-                    ('data_completamento', 'DATETIME'),
-                    ('data_conferma', 'DATETIME'),
+                    ('data_completamento', datetime_type),
+                    ('data_conferma', datetime_type),
                     ('note_completamento', 'TEXT')
                 ]
                 
                 # Verifica quali colonne esistono già
-                result = conn.execute(text("PRAGMA table_info(todo_items)"))
-                colonne_esistenti = [row[1] for row in result.fetchall()]
+                if dialect == 'sqlite':
+                    result = conn.execute(text("PRAGMA table_info(todo_items)"))
+                    colonne_esistenti = [row[1] for row in result.fetchall()]
+                else:
+                    result = conn.execute(text("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'todo_items'
+                    """))
+                    colonne_esistenti = [row[0] for row in result.fetchall()]
                 
                 print(f"📋 Colonne esistenti: {', '.join(colonne_esistenti)}")
                 
