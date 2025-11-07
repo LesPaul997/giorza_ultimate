@@ -339,16 +339,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Mobile cards
         document.getElementById('mobileOrdersContainer').innerHTML = orders.map(order => `
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200">
+            <div onclick="window.location.href='/ordine/${order.seriale}'" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer active:bg-gray-50">
                 <div class="flex items-start justify-between mb-3">
-                    <div onclick="window.location.href='/ordine/${order.seriale}'" class="flex-1 cursor-pointer">
+                    <div class="flex-1">
                         <h3 class="text-lg font-semibold text-gray-900">Ordine ${order.numero_ordine}</h3>
                         <p class="text-sm text-gray-500">${formatDate(order.data_ordine)}</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         ${getStatusBadge(order.status)}
                         ${isCassiere ? `
-                        <button onclick="openPreviewModal('${order.seriale}'); event.stopPropagation();" 
+                        <button onclick="event.stopPropagation(); openPreviewModal('${order.seriale}');" 
                                 class="inline-flex items-center justify-center w-8 h-8 border border-blue-300 rounded-full text-blue-600 hover:bg-blue-50 active:bg-blue-100"
                                 title="Anteprima veloce">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
