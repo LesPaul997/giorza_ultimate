@@ -751,12 +751,44 @@ def api_orders_search():
             search_term_lower in str(order.get("descrizione_supplementare", "")).lower()):
             filtered_orders.append(order)
     
-    # Ordina per numero ordine (maggiore prima)
-    sorted_orders = sorted(
-        filtered_orders, 
-        key=lambda x: int(x["numero_ordine"]) if x["numero_ordine"] and str(x["numero_ordine"]).isdigit() else 0, 
-        reverse=True
-    )
+    # Ordina per data (più recente prima) e poi per numero ordine (maggiore prima)
+    # Questo risolve il problema quando il progressivo riparte da 1 in un nuovo anno
+    def sort_key(order):
+        # Estrai data_ordine e convertila in formato comparabile
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            # Se è già un datetime, usa direttamente
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            # Se è una stringa, prova a parsarla
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    # Prova vari formati comuni
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)  # Fallback per date non parseabili
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)  # Fallback per ordini senza data
+        
+        # Estrai numero_ordine
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        
+        # Ritorna tupla (data, numero) per ordinamento: più recente e numero maggiore prima
+        return (data_sort, num_sort)
+    
+    sorted_orders = sorted(filtered_orders, key=sort_key, reverse=True)
     
     return jsonify({
         "orders": sorted_orders,
@@ -904,13 +936,44 @@ def api_orders():
                     status_summary.append(f"{reparto}: {reparto_status.get('status', 'nuovo')}")
                 order["status_summary"] = " | ".join(status_summary)
     
-    # Ordina gli ordini per numero ordine (maggiore prima)
-    # Converte numero_ordine in int per ordinamento corretto
-    sorted_orders = sorted(
-        unique_orders.values(), 
-        key=lambda x: int(x["numero_ordine"]) if x["numero_ordine"] and str(x["numero_ordine"]).isdigit() else 0, 
-        reverse=True
-    )
+    # Ordina gli ordini per data (più recente prima) e poi per numero ordine (maggiore prima)
+    # Questo risolve il problema quando il progressivo riparte da 1 in un nuovo anno
+    def sort_key(order):
+        # Estrai data_ordine e convertila in formato comparabile
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            # Se è già un datetime, usa direttamente
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            # Se è una stringa, prova a parsarla
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    # Prova vari formati comuni
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)  # Fallback per date non parseabili
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)  # Fallback per ordini senza data
+        
+        # Estrai numero_ordine
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        
+        # Ritorna tupla (data, numero) per ordinamento: più recente e numero maggiore prima
+        return (data_sort, num_sort)
+    
+    sorted_orders = sorted(unique_orders.values(), key=sort_key, reverse=True)
     
     # Parametri di paginazione
     page = request.args.get('page', 1, type=int)
@@ -1643,11 +1706,35 @@ def ordini_preparazione():
                 orders_with_status.append(order)
     
     # Ordina per data (più recente prima) e numero ordine (maggiore prima)
-    sorted_orders = sorted(
-        orders_with_status, 
-        key=lambda x: (x["data_ordine"], x["numero_ordine"]), 
-        reverse=True
-    )
+    # Usa la stessa funzione sort_key per gestire correttamente il cambio anno
+    def sort_key(order):
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        return (data_sort, num_sort)
+    
+    sorted_orders = sorted(orders_with_status, key=sort_key, reverse=True)
     
     # RIMUOVO COMPLETAMENTE I CONTATORI per alleggerire
     # Solo per cassiere, contatori semplificati
@@ -1764,11 +1851,35 @@ def ordini_preparati():
                 orders_with_status.append(order)
     
     # Ordina per data (più recente prima) e numero ordine (maggiore prima)
-    sorted_orders = sorted(
-        orders_with_status, 
-        key=lambda x: (x["data_ordine"], x["numero_ordine"]), 
-        reverse=True
-    )
+    # Usa la stessa funzione sort_key per gestire correttamente il cambio anno
+    def sort_key(order):
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        return (data_sort, num_sort)
+    
+    sorted_orders = sorted(orders_with_status, key=sort_key, reverse=True)
     
     return render_template("ordini_preparati.html", orders=sorted_orders)
 
@@ -3173,34 +3284,38 @@ def trasporti_dashboard():
             order["delivery_address"] = f"{delivery_address.indirizzo}, {delivery_address.citta} ({delivery_address.provincia})"
     
     # Ordina gli ordini per data (più recente prima) e numero ordine (maggiore prima)
-    sorted_orders = sorted(
-        unique_orders.values(), 
-        key=lambda x: (x["data_ordine"], x["numero_ordine"]), 
-        reverse=True
-    )
+    # Usa la stessa funzione sort_key per gestire correttamente il cambio anno
+    def sort_key(order):
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        return (data_sort, num_sort)
     
-    # Ottieni le tratte attive
-    active_routes = DeliveryRoute.query.filter(
-        DeliveryRoute.stato.in_(['pianificata', 'in_corso'])
-    ).order_by(DeliveryRoute.timestamp.desc()).all()
-    
-    # Ottieni il prezzo del carburante più recente
-    latest_fuel_cost = FuelCost.query.order_by(FuelCost.data_aggiornamento.desc()).first()
-    fuel_price = latest_fuel_cost.prezzo_litro if latest_fuel_cost else 1.80  # Default
+    sorted_orders = sorted(unique_orders.values(), key=sort_key, reverse=True)
     
     return render_template("trasporti_dashboard.html", 
-                         orders=sorted_orders,
-                         active_routes=active_routes,
-                         fuel_price=fuel_price)
-
-
-@app.route('/pianifica-tratta')
-@login_required
-def pianifica_tratta():
-    """Pagina per la pianificazione di nuove tratte"""
-    if current_user.role != 'trasporti':
-        abort(403)
-    return render_template('pianifica_tratta.html')
+                         orders=sorted_orders)
 
 
 def calculate_order_weight(seriale):
@@ -3316,11 +3431,35 @@ def api_trasporti_orders():
             order["coordinate_lng"] = first_address.coordinate_lng
     
     # Ordina gli ordini per data (più recente prima) e numero ordine (maggiore prima)
-    sorted_orders = sorted(
-        unique_orders.values(), 
-        key=lambda x: (x["data_ordine"], x["numero_ordine"]), 
-        reverse=True
-    )
+    # Usa la stessa funzione sort_key per gestire correttamente il cambio anno
+    def sort_key(order):
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        return (data_sort, num_sort)
+    
+    sorted_orders = sorted(unique_orders.values(), key=sort_key, reverse=True)
     
     return jsonify({
         "success": True,
@@ -3347,14 +3486,29 @@ def api_trasporti_all_orders():
         if seriale not in unique_orders:
             unique_orders[seriale] = order
     
-    # Aggiungi informazioni per ogni ordine
+    # OTTIMIZZAZIONE: Query batch invece di N+1 queries
+    # Prendi tutti i seriali
+    all_seriali = list(unique_orders.keys())
+    
+    # Query batch per stati ordini (una sola query invece di N)
+    status_records = {s.seriale: s for s in OrderStatus.query.filter(OrderStatus.seriale.in_(all_seriali)).all()}
+    
+    # Query batch per indirizzi (una sola query invece di N)
+    all_addresses = DeliveryAddress.query.filter(DeliveryAddress.seriale.in_(all_seriali)).all()
+    addresses_by_seriale = {}
+    for addr in all_addresses:
+        if addr.seriale not in addresses_by_seriale:
+            addresses_by_seriale[addr.seriale] = []
+        addresses_by_seriale[addr.seriale].append(addr)
+    
+    # Aggiungi informazioni per ogni ordine (ora usa i dati batch)
     for seriale, order in unique_orders.items():
         # Controlla se è un ordine di consegna
         note = order.get("ritiro", "").lower()
         order["is_consegna"] = "consegna" in note
         
-        # Stato generale dell'ordine
-        status_record = OrderStatus.query.filter_by(seriale=seriale).first()
+        # Stato generale dell'ordine (da cache batch)
+        status_record = status_records.get(seriale)
         if status_record:
             order["status"] = status_record.status
             order["status_operatore"] = status_record.operatore
@@ -3379,8 +3533,8 @@ def api_trasporti_all_orders():
         # Calcola il peso totale dell'ordine
         order["peso_totale_kg"] = calculate_order_weight(seriale)
         
-        # Controlla se ha indirizzi di consegna
-        delivery_addresses = DeliveryAddress.query.filter_by(seriale=seriale).all()
+        # Controlla se ha indirizzi di consegna (da cache batch)
+        delivery_addresses = addresses_by_seriale.get(seriale, [])
         order["has_delivery_address"] = len(delivery_addresses) > 0
         order["delivery_addresses"] = []
         if delivery_addresses:
@@ -3401,22 +3555,36 @@ def api_trasporti_all_orders():
             order["coordinate_lat"] = first_address.coordinate_lat
             order["coordinate_lng"] = first_address.coordinate_lng
         
-        # Controlla se l'ordine ha un trasporto associato
-        delivery_route = DeliveryRoute.query.filter(
-            DeliveryRoute.ordini_seriali.contains(seriale)
-        ).first()
-        order["has_transport"] = delivery_route is not None
-        if delivery_route:
-            order["transport_id"] = delivery_route.id
-            order["transport_status"] = delivery_route.stato
-            order["transport_date"] = delivery_route.data_consegna.isoformat() if delivery_route.data_consegna else None
-    
     # Ordina gli ordini per data (più recente prima) e numero ordine (maggiore prima)
-    sorted_orders = sorted(
-        unique_orders.values(), 
-        key=lambda x: (x["data_ordine"], x["numero_ordine"]), 
-        reverse=True
-    )
+    # Usa la stessa funzione sort_key per gestire correttamente il cambio anno
+    def sort_key(order):
+        data_ordine = order.get("data_ordine")
+        if data_ordine:
+            if hasattr(data_ordine, 'year'):
+                data_sort = (data_ordine.year, data_ordine.month, data_ordine.day)
+            elif isinstance(data_ordine, str):
+                try:
+                    from datetime import datetime
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']:
+                        try:
+                            dt = datetime.strptime(data_ordine.split()[0], fmt)
+                            data_sort = (dt.year, dt.month, dt.day)
+                            break
+                        except:
+                            continue
+                    else:
+                        data_sort = (1900, 1, 1)
+                except:
+                    data_sort = (1900, 1, 1)
+            else:
+                data_sort = (1900, 1, 1)
+        else:
+            data_sort = (1900, 1, 1)
+        numero_ordine = order.get("numero_ordine")
+        num_sort = int(numero_ordine) if numero_ordine and str(numero_ordine).isdigit() else 0
+        return (data_sort, num_sort)
+    
+    sorted_orders = sorted(unique_orders.values(), key=sort_key, reverse=True)
     
     return jsonify({
         "success": True,
@@ -3456,7 +3624,7 @@ def add_delivery_address():
         
         # Costruisci l'indirizzo completo
         indirizzo_completo = f"{indirizzo}, {cap} {citta}, {provincia}, Italia"
-        print(f"🔍 Tentativo geocoding per: {indirizzo_completo}")
+        # Geocoding silenzioso
         
         # Usa Nominatim (OpenStreetMap) per il geocoding gratuito
         url = "https://nominatim.openstreetmap.org/search"
@@ -3467,8 +3635,7 @@ def add_delivery_address():
             'addressdetails': 1
         }
         
-        print(f"🌐 URL richiesta: {url}")
-        print(f"📋 Parametri: {params}")
+        # Geocoding silenzioso
         
         headers = {
             'User-Agent': 'EstazioneOrdini/1.0 (https://github.com/estazione-ordini; trasporti@example.com)'
@@ -3478,21 +3645,16 @@ def add_delivery_address():
         time.sleep(1)
         
         response = requests.get(url, params=params, headers=headers, timeout=10)
-        print(f"📡 Status code: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            print(f"📄 Risposta JSON: {data}")
             
             if data and len(data) > 0:
                 coordinate_lat = float(data[0]['lat'])
                 coordinate_lng = float(data[0]['lon'])
-                print(f"✅ Geocoding riuscito per {indirizzo_completo}: {coordinate_lat}, {coordinate_lng}")
             else:
-                print(f"❌ Geocoding fallito per {indirizzo_completo}: nessun risultato")
                 # Prova con un indirizzo più semplice
                 indirizzo_semplice = f"{citta}, {provincia}, Italia"
-                print(f"🔄 Retry con indirizzo semplificato: {indirizzo_semplice}")
                 
                 time.sleep(1)  # Delay per il retry
                 params['q'] = indirizzo_semplice
@@ -3502,24 +3664,14 @@ def add_delivery_address():
                     if data2 and len(data2) > 0:
                         coordinate_lat = float(data2[0]['lat'])
                         coordinate_lng = float(data2[0]['lon'])
-                        print(f"✅ Geocoding riuscito con indirizzo semplificato: {coordinate_lat}, {coordinate_lng}")
-                    else:
-                        print(f"❌ Anche il retry è fallito")
-                else:
-                    print(f"❌ Errore nel retry: {response2.status_code}")
         elif response.status_code == 403:
-            print(f"❌ Nominatim ha bloccato la richiesta (403). Usando coordinate di default.")
+            # Nominatim ha rate limiting - non loggare come errore, è normale
             # Usa coordinate approssimative per l'Italia
             coordinate_lat = 41.9028  # Roma
             coordinate_lng = 12.4964
-        else:
-            print(f"❌ Errore geocoding per {indirizzo_completo}: {response.status_code}")
-            print(f"📄 Risposta: {response.text}")
     except Exception as e:
-        print(f"❌ Errore durante il geocoding: {e}")
-        import traceback
-        traceback.print_exc()
-        # Continua senza coordinate
+        # Errore geocoding - continua senza coordinate (non loggare ogni errore)
+        pass
     
     # Crea il nuovo indirizzo
     delivery_address = DeliveryAddress(
@@ -3579,7 +3731,7 @@ def update_delivery_address(address_id):
         
         # Costruisci l'indirizzo completo
         indirizzo_completo = f"{indirizzo}, {cap} {citta}, {provincia}, Italia"
-        print(f"🔍 Tentativo geocoding per: {indirizzo_completo}")
+        # Geocoding silenzioso
         
         # Usa Nominatim (OpenStreetMap) per il geocoding gratuito
         url = "https://nominatim.openstreetmap.org/search"
@@ -3590,8 +3742,7 @@ def update_delivery_address(address_id):
             'addressdetails': 1
         }
         
-        print(f"🌐 URL richiesta: {url}")
-        print(f"📋 Parametri: {params}")
+        # Geocoding silenzioso
         
         headers = {
             'User-Agent': 'EstazioneOrdini/1.0 (https://github.com/estazione-ordini; trasporti@example.com)'
@@ -3601,21 +3752,16 @@ def update_delivery_address(address_id):
         time.sleep(1)
         
         response = requests.get(url, params=params, headers=headers, timeout=10)
-        print(f"📡 Status code: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            print(f"📄 Risposta JSON: {data}")
             
             if data and len(data) > 0:
                 coordinate_lat = float(data[0]['lat'])
                 coordinate_lng = float(data[0]['lon'])
-                print(f"✅ Geocoding riuscito per {indirizzo_completo}: {coordinate_lat}, {coordinate_lng}")
             else:
-                print(f"❌ Geocoding fallito per {indirizzo_completo}: nessun risultato")
                 # Prova con un indirizzo più semplice
                 indirizzo_semplice = f"{citta}, {provincia}, Italia"
-                print(f"🔄 Retry con indirizzo semplificato: {indirizzo_semplice}")
                 
                 time.sleep(1)  # Delay per il retry
                 params['q'] = indirizzo_semplice
@@ -3625,24 +3771,14 @@ def update_delivery_address(address_id):
                     if data2 and len(data2) > 0:
                         coordinate_lat = float(data2[0]['lat'])
                         coordinate_lng = float(data2[0]['lon'])
-                        print(f"✅ Geocoding riuscito con indirizzo semplificato: {coordinate_lat}, {coordinate_lng}")
-                    else:
-                        print(f"❌ Anche il retry è fallito")
-                else:
-                    print(f"❌ Errore nel retry: {response2.status_code}")
         elif response.status_code == 403:
-            print(f"❌ Nominatim ha bloccato la richiesta (403). Usando coordinate di default.")
+            # Nominatim ha rate limiting - non loggare come errore, è normale
             # Usa coordinate approssimative per l'Italia
             coordinate_lat = 41.9028  # Roma
             coordinate_lng = 12.4964
-        else:
-            print(f"❌ Errore geocoding per {indirizzo_completo}: {response.status_code}")
-            print(f"📄 Risposta: {response.text}")
     except Exception as e:
-        print(f"❌ Errore durante il geocoding: {e}")
-        import traceback
-        traceback.print_exc()
-        # Continua senza coordinate
+        # Errore geocoding - continua senza coordinate (non loggare ogni errore)
+        pass
     
     # Aggiorna i campi
     delivery_address.indirizzo = indirizzo
@@ -3708,315 +3844,652 @@ def get_delivery_addresses(seriale):
     } for addr in addresses])
 
 
-@app.route("/api/trasporti/calculate-route", methods=["POST"])
+@app.route("/api/trasporti/order-detail/<seriale>")
 @login_required
-def calculate_route():
-    """Calcola una tratta di consegna"""
+def api_trasporti_order_detail(seriale):
+    """API per ottenere i dettagli completi di un ordine (con righe non raggruppate)"""
+    if current_user.role != 'trasporti':
+        abort(403)
+    
+    # Trova tutte le righe dell'ordine (non raggruppate)
+    order_lines = [o for o in app.config["ORDERS_CACHE"] if o["seriale"] == seriale]
+    
+    if not order_lines:
+        return jsonify({"success": False, "error": "Ordine non trovato"}), 404
+    
+    # Prendi i dati base dal primo ordine
+    first_line = order_lines[0]
+    order_data = {
+        "seriale": seriale,
+        "numero_ordine": first_line.get("numero_ordine"),
+        "cliente": first_line.get("cliente") or first_line.get("nome_cliente"),
+        "nome_cliente": first_line.get("nome_cliente"),
+        "data_ordine": first_line.get("data_ordine"),
+        "peso_totale_kg": calculate_order_weight(seriale),
+        "lines": []
+    }
+    
+    # Aggiungi tutte le righe (non raggruppate)
+    for line in order_lines:
+        order_data["lines"].append({
+            "codice_articolo": line.get("codice_articolo"),
+            "descrizione_articolo": line.get("descrizione_articolo"),
+            "quantita": line.get("quantita", 0),
+            "unita_misura": line.get("unita_misura"),
+            "codice_reparto": line.get("codice_reparto")
+        })
+    
+    # Aggiungi stato
+    status_record = OrderStatus.query.filter_by(seriale=seriale).first()
+    if status_record:
+        order_data["status"] = status_record.status
+    else:
+        order_data["status"] = "nuovo"
+    
+    # Aggiungi indirizzi di consegna
+    delivery_addresses = DeliveryAddress.query.filter_by(seriale=seriale).all()
+    order_data["delivery_addresses"] = []
+    if delivery_addresses:
+        for addr in delivery_addresses:
+            order_data["delivery_addresses"].append({
+                "id": addr.id,
+                "indirizzo_completo": f"{addr.indirizzo}, {addr.citta}, {addr.provincia} {addr.cap}",
+                "note": addr.note_indirizzo
+            })
+    
+    return jsonify({
+        "success": True,
+        "order": order_data
+    })
+
+
+@app.route("/api/trasporti/weights", methods=["POST"])
+@login_required
+def api_trasporti_weights():
+    """API leggera per ottenere solo i pesi aggiornati degli ordini"""
     if current_user.role != 'trasporti':
         abort(403)
     
     data = request.get_json()
-    ordini_seriali = data.get("ordini_seriali", [])
-    indirizzi_selezionati = data.get("indirizzi_selezionati", [])  # Lista di ID indirizzi
-    indirizzo_partenza = data.get("indirizzo_partenza")
-    truck_id = data.get("truck_id")
+    seriali = data.get("seriali", [])
     
-    print(f"🔍 DEBUG CALCOLO TRATTA:")
-    print(f"  Indirizzo partenza: {indirizzo_partenza}")
-    print(f"  Ordini seriali: {ordini_seriali}")
-    print(f"  Indirizzi selezionati: {indirizzi_selezionati}")
-    print(f"  ID Camion: {truck_id}")
+    if not seriali:
+        return jsonify({"success": False, "error": "Nessun seriale fornito"}), 400
     
-    if not ordini_seriali or not indirizzo_partenza:
-        return jsonify({"error": "Dati mancanti"}), 400
+    weights = {}
+    for seriale in seriali:
+        weights[seriale] = calculate_order_weight(seriale)
     
-    # Ottieni gli indirizzi di consegna selezionati
-    delivery_addresses = []
-    if indirizzi_selezionati:
-        # Se sono stati selezionati indirizzi specifici, usa quelli
-        for address_id in indirizzi_selezionati:
-            address = DeliveryAddress.query.get(address_id)
-            if address:
-                delivery_addresses.append({
-                    "id": address.id,
-                    "seriale": address.seriale,
-                    "indirizzo": f"{address.indirizzo}, {address.citta}",
-                    "lat": address.coordinate_lat,
-                    "lng": address.coordinate_lng
-                })
-    else:
-        # Altrimenti usa il primo indirizzo di ogni ordine
-        for seriale in ordini_seriali:
-            address = DeliveryAddress.query.filter_by(seriale=seriale).first()
-            if address:
-                delivery_addresses.append({
-                    "id": address.id,
-                    "seriale": seriale,
-                    "indirizzo": f"{address.indirizzo}, {address.citta}",
-                    "lat": address.coordinate_lat,
-                    "lng": address.coordinate_lng
-                })
+    return jsonify({
+        "success": True,
+        "weights": weights
+    })
+
+
+# Mappatura leggera province italiane (solo per conversione nome->codice)
+# Dizionario compatto: solo le province principali, non tutte le varianti
+PROVINCE_IT_MAP = {
+    'agrigento': 'AG', 'alessandria': 'AL', 'ancona': 'AN', 'aosta': 'AO', 'arezzo': 'AR',
+    'ascoli piceno': 'AP', 'asti': 'AT', 'avellino': 'AV', 'bari': 'BA', 'barletta-andria-trani': 'BT',
+    'belluno': 'BL', 'benevento': 'BN', 'bergamo': 'BG', 'biella': 'BI', 'bologna': 'BO',
+    'bolzano': 'BZ', 'brescia': 'BS', 'brindisi': 'BR', 'cagliari': 'CA', 'caltanissetta': 'CL',
+    'campobasso': 'CB', 'caserta': 'CE', 'catania': 'CT', 'catanzaro': 'CZ', 'chieti': 'CH',
+    'como': 'CO', 'cosenza': 'CS', 'cremona': 'CR', 'crotone': 'KR', 'cuneo': 'CN',
+    'enna': 'EN', 'fermo': 'FM', 'ferrara': 'FE', 'firenze': 'FI', 'foggia': 'FG',
+    'forlì-cesena': 'FC', 'forlì cesena': 'FC', 'frosinone': 'FR', 'genova': 'GE', 'gorizia': 'GO', 'grosseto': 'GR',
+    'imperia': 'IM', 'isernia': 'IS', 'la spezia': 'SP', 'spezia': 'SP', 'l\'aquila': 'AQ', 'aquila': 'AQ', 'latina': 'LT',
+    'lecce': 'LE', 'lecco': 'LC', 'livorno': 'LI', 'lodi': 'LO', 'lucca': 'LU',
+    'macerata': 'MC', 'mantova': 'MN', 'massa-carrara': 'MS', 'massa carrara': 'MS', 'matera': 'MT', 'messina': 'ME',
+    'milano': 'MI', 'modena': 'MO', 'monza e brianza': 'MB', 'monza': 'MB', 'napoli': 'NA', 'novara': 'NO',
+    'nuoro': 'NU', 'oristano': 'OR', 'padova': 'PD', 'palermo': 'PA', 'parma': 'PR',
+    'pavia': 'PV', 'perugia': 'PG', 'pesaro e urbino': 'PU', 'pesaro urbino': 'PU', 'pescara': 'PE', 'piacenza': 'PC',
+    'pisa': 'PI', 'pistoia': 'PT', 'pordenone': 'PN', 'potenza': 'PZ', 'prato': 'PO',
+    'ragusa': 'RG', 'ravenna': 'RA', 'reggio calabria': 'RC', 'reggio emilia': 'RE', 'rieti': 'RI',
+    'rimini': 'RN', 'roma': 'RM', 'rovigo': 'RO', 'salerno': 'SA', 'sassari': 'SS',
+    'savona': 'SV', 'siena': 'SI', 'siracusa': 'SR', 'sondrio': 'SO', 'sud sardegna': 'SU',
+    'taranto': 'TA', 'teramo': 'TE', 'terni': 'TR', 'torino': 'TO', 'trapani': 'TP',
+    'trento': 'TN', 'treviso': 'TV', 'trieste': 'TS', 'udine': 'UD', 'varese': 'VA',
+    'venezia': 'VE', 'verbania': 'VB', 'vercelli': 'VC', 'verona': 'VR', 'vibo valentia': 'VV',
+    'vicenza': 'VI', 'viterbo': 'VT'
+}
+
+def get_province_code(state_name):
+    """Converte il nome provincia in codice (leggero, senza logiche complesse)"""
+    if not state_name:
+        return ''
+    state_lower = state_name.lower().strip()
+    # Se è già un codice a 2 lettere, restituiscilo
+    if len(state_lower) == 2 and state_lower.isalpha():
+        return state_lower.upper()
+    # Cerca nella mappatura
+    return PROVINCE_IT_MAP.get(state_lower, '')
+
+# HERE API Credentials
+HERE_APP_ID = "Gl6wmoOfjmk4m5bNwd4N"
+HERE_API_KEY = "cLU54RrCd1PdVmhZBexdbO7ixqzPTjSn7HcqGTbRd7k"
+
+@app.route("/api/trasporti/search-address", methods=["GET"])
+@login_required
+def api_trasporti_search_address():
+    """API proxy per cercare indirizzi usando HERE Autocomplete API"""
+    if current_user.role != 'trasporti':
+        abort(403)
     
-    if not delivery_addresses:
-        return jsonify({"error": "Nessun indirizzo di consegna trovato"}), 400
-    
-    print(f"📦 Indirizzi di consegna trovati:")
-    for i, addr in enumerate(delivery_addresses):
-        print(f"  {i+1}. {addr['indirizzo']} - Coordinate: ({addr.get('lat')}, {addr.get('lng')})")
-    
-    # Calcolo della distanza usando le coordinate (formula di Haversine)
-    def haversine_distance(lat1, lon1, lat2, lon2):
-        """Calcola la distanza tra due punti usando la formula di Haversine"""
-        # Raggio della Terra in km
-        R = 6371
-        
-        # Converti gradi in radianti
-        lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-        
-        # Differenze delle coordinate
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        
-        # Formula di Haversine
-        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-        c = 2 * math.asin(math.sqrt(a))
-        
-        return R * c
-    
-    # Calcola la distanza totale (andata + ritorno)
-    distanza_totale_km = 0
-    tempo_stimato_minuti = 0
-    
-    # Geocoding dell'indirizzo di partenza per ottenere le coordinate reali
-    partenza_lat = None
-    partenza_lon = None
+    query = request.args.get('q', '')
+    if not query or len(query) < 3:
+        return jsonify({"success": False, "error": "Query troppo corta"}), 400
     
     try:
-        import requests
-        import time
+        try:
+            import requests
+        except ImportError:
+            return jsonify({"success": False, "error": "Libreria requests non disponibile"}), 500
         
-        # Usa Nominatim per geocoding dell'indirizzo di partenza
-        url = "https://nominatim.openstreetmap.org/search"
+        # HERE Autocomplete API
+        url = "https://autocomplete.search.hereapi.com/v1/autocomplete"
         params = {
-            'q': f"{indirizzo_partenza}, Italia",
-            'format': 'json',
-            'limit': 1
+            'q': query,
+            'limit': 6,
+            'lang': 'it',
+            'in': 'countryCode:ITA',  # Limita all'Italia
+            'apiKey': HERE_API_KEY
         }
         
         headers = {
-            'User-Agent': 'EstazioneOrdini/1.0 (trasporti@example.com)'
+            'Accept': 'application/json'
         }
         
-        time.sleep(1)  # Rispetta i limiti di rate
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        # Timeout breve per risposta veloce
+        response = requests.get(url, params=params, headers=headers, timeout=5)
         
-        if response.status_code == 200:
-            data = response.json()
-            if data and len(data) > 0:
-                partenza_lat = float(data[0]['lat'])
-                partenza_lon = float(data[0]['lon'])
-                print(f"✅ Geocoding partenza riuscito: {indirizzo_partenza} -> ({partenza_lat}, {partenza_lon})")
-            else:
-                print(f"❌ Geocoding partenza fallito per: {indirizzo_partenza}")
-        else:
-            print(f"❌ Errore geocoding partenza: {response.status_code}")
+        # Debug: log della risposta se errore
+        if response.status_code != 200:
+            print(f"⚠️ HERE API Error {response.status_code}: {response.text}")
+            return jsonify({"success": True, "results": []})  # Ritorna lista vuota invece di errore
+        
+        response.raise_for_status()
+        data = response.json()
+        
+        # Debug: log struttura risposta
+        if not data.get('items'):
+            print(f"⚠️ HERE API: nessun risultato per query '{query}'")
+        
+        # Formatta i risultati da HERE
+        results = []
+        if data.get('items'):
+            for item in data['items']:
+                # HERE restituisce i dati in item.address
+                address = item.get('address', {})
+                title = item.get('title', '')
+                result_type_api = item.get('resultType', '')
+                
+                # Estrai informazioni dalla struttura HERE
+                street = address.get('street', '') or ''
+                city = address.get('city', '') or address.get('county', '')
+                state = address.get('state', '') or ''  # Nome completo della regione/provincia
+                county_code = address.get('countyCode', '') or ''  # Codice provincia (es. "NA")
+                postcode = address.get('postalCode', '') or ''
+                
+                # Se non c'è street ma title contiene prefissi di strada, usa title
+                if not street and title:
+                    title_lower = title.lower()
+                    street_prefixes = ['via ', 'viale ', 'piazza ', 'corso ', 'largo ', 'piazzale ', 
+                                      'strada ', 'vicolo ', 'borgo ', 'contrada ', 'frazione ']
+                    if any(title_lower.startswith(prefix) for prefix in street_prefixes):
+                        street = title
+                
+                # Determina tipo e rilevanza basandosi su resultType di HERE
+                if result_type_api == 'street' or street:
+                    result_type = 'street'
+                    relevance_score = 100
+                elif result_type_api == 'city' or city:
+                    result_type = 'city'
+                    relevance_score = 50
+                else:
+                    result_type = 'other'
+                    relevance_score = 10
+                
+                # Costruisci display_name usando il label di HERE se disponibile, altrimenti costruiscilo
+                display_name = address.get('label', '')
+                if not display_name:
+                    display_parts = []
+                    if street:
+                        display_parts.append(street)
+                    if city:
+                        display_parts.append(city)
+                    if postcode:
+                        display_parts.append(f"({postcode})")
+                    display_name = ', '.join(display_parts) if display_parts else title
+                
+                # Estrai codice provincia: HERE fornisce countyCode che è già il codice provincia
+                province_code = county_code.upper() if county_code and len(county_code) == 2 else ''
+                if not province_code and state:
+                    # Se non c'è countyCode, prova a convertire il nome stato
+                    province_code = get_province_code(state)
+                
+                results.append({
+                    'name': title,
+                    'street': street,
+                    'city': city,
+                    'state': state,
+                    'state_code': province_code,
+                    'postcode': postcode,
+                    'display_name': display_name,
+                    'type': result_type,
+                    'relevance': relevance_score
+                })
+        
+        # Ordina per rilevanza
+        results.sort(key=lambda x: -x['relevance'])
+        
+        return jsonify({
+            "success": True,
+            "results": results[:6]  # Massimo 6 risultati
+        })
+        
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "Timeout nella ricerca. Riprova."}), 500
+    except requests.exceptions.HTTPError as e:
+        # Se HERE restituisce errore, ritorna lista vuota invece di errore
+        return jsonify({"success": True, "results": []})
+    except requests.exceptions.RequestException as e:
+        # Errore di connessione - ritorna lista vuota
+        return jsonify({"success": True, "results": []})
     except Exception as e:
-        print(f"❌ Errore durante geocoding partenza: {e}")
-    
-    # Se il geocoding fallisce, usa coordinate di default
-    if partenza_lat is None or partenza_lon is None:
-        partenza_lat = 40.7458  # Nocera Inferiore (default)
-        partenza_lon = 14.6464
-        print(f"⚠️ Usando coordinate di default per partenza: ({partenza_lat}, {partenza_lon})")
-    
-    # Calcola distanza per ogni consegna (solo andata)
-    for i, delivery in enumerate(delivery_addresses):
-        print(f"Consegna {i+1}: {delivery['indirizzo']}")
-        print(f"  Coordinate: lat={delivery.get('lat')}, lng={delivery.get('lng')}")
-        
-        if delivery.get('lat') and delivery.get('lng'):
-            # Calcola distanza dal punto di partenza (o dalla consegna precedente)
-            if i == 0:
-                # Prima consegna: dal punto di partenza
-                dist = haversine_distance(partenza_lat, partenza_lon, delivery['lat'], delivery['lng'])
-                print(f"  Distanza da partenza ({partenza_lat}, {partenza_lon}): {dist:.2f} km")
-            else:
-                # Conseguenti: dalla consegna precedente
-                prev_delivery = delivery_addresses[i-1]
-                dist = haversine_distance(prev_delivery['lat'], prev_delivery['lng'], delivery['lat'], delivery['lng'])
-                print(f"  Distanza da consegna precedente: {dist:.2f} km")
-            
-            distanza_totale_km += dist
-            # Stima tempo: 30 minuti per consegna + tempo di viaggio (60 km/h media)
-            tempo_viaggio = (dist / 60) * 60  # minuti
-            tempo_stimato_minuti += tempo_viaggio + 30
-            print(f"  Tempo stimato per questa consegna: {tempo_viaggio + 30} minuti")
-        else:
-            # Se non ci sono coordinate, usa una stima fissa
-            print(f"  Nessuna coordinata disponibile, usando stima fissa")
-            distanza_totale_km += 25
-            tempo_stimato_minuti += 30
-    
-    print(f"📊 CALCOLO SOLO ANDATA:")
-    print(f"  Distanza totale (solo andata): {distanza_totale_km:.2f} km")
-    print(f"  Tempo stimato (solo andata): {tempo_stimato_minuti:.0f} minuti")
-    
-    # Logica prezzi fissi per camion
-    print(f"🚛 CALCOLO PREZZI FISSI:")
-    print(f"  Camion ID: {truck_id}")
-    print(f"  Distanza totale: {distanza_totale_km:.2f} km")
-    
-    # Prezzi fissi per camion (entro 10km)
-    prezzi_fissi_camion = {
-        "1": 50,  # FIAT 35F Daily
-        "2": 50,  # IVECO DAILY 35-180
-        "3": 75,  # Mercedes Sprinter (esempio)
-        "4": 100, # Altri camion (esempio)
-    }
-    
-    # Supplemento gru (€40)
-    supplemento_gru = 40
-    
-    # Prezzo fisso del camion selezionato
-    prezzo_fisso_camion = prezzi_fissi_camion.get(truck_id, 50)  # Default €50
-    prezzo_fisso_totale = prezzo_fisso_camion + supplemento_gru
-    
-    print(f"  Prezzo fisso camion: €{prezzo_fisso_camion}")
-    print(f"  Supplemento gru: €{supplemento_gru}")
-    print(f"  Prezzo fisso totale: €{prezzo_fisso_totale}")
-    
-    # Calcolo costo carburante solo se oltre 10km
-    if distanza_totale_km <= 10:
-        # Entro 10km: solo prezzo fisso
-        litri_totali = 0
-        costo_carburante_euro = 0
-        prezzo_litro = 0
-        print(f"  ✅ Entro 10km: solo prezzo fisso €{prezzo_fisso_totale}")
-    else:
-        # Oltre 10km: prezzo fisso + consumo extra
-        km_extra = distanza_totale_km - 10
-        consumo_litro_per_km = 1 / 3  # 3 km/l = 1/3 l/km
-        litri_totali = km_extra * consumo_litro_per_km
-    
-    # Ottieni il prezzo del carburante
-    latest_fuel_cost = FuelCost.query.order_by(FuelCost.data_aggiornamento.desc()).first()
-    prezzo_litro = latest_fuel_cost.prezzo_litro if latest_fuel_cost else 1.85
-    
-    # Aggiungi il costo dell'operatore (€3.15 per litro)
-    prezzo_litro_con_operatore = prezzo_litro + 3.15
-    
-    costo_carburante_euro = litri_totali * prezzo_litro_con_operatore
-    
-    if distanza_totale_km > 10:
-        print(f"  📈 Oltre 10km:")
-        print(f"    Km extra: {km_extra:.2f}")
-        print(f"    Litri extra: {litri_totali:.2f}")
-        print(f"    Prezzo litro: €{prezzo_litro}")
-        print(f"    Costo carburante extra: €{costo_carburante_euro:.2f}")
-    
-    # Prezzo totale finale
-    prezzo_totale = prezzo_fisso_totale + costo_carburante_euro
-    
-    print(f"📊 RISULTATO CALCOLO:")
-    print(f"  Distanza totale: {distanza_totale_km:.2f} km")
-    print(f"  Tempo stimato: {tempo_stimato_minuti:.0f} minuti")
-    print(f"  Litri totali: {litri_totali:.2f}")
-    print(f"  Prezzo litro: €{prezzo_litro}")
-    print(f"  Costo carburante: €{costo_carburante_euro:.2f}")
-    print(f"  Prezzo totale: €{prezzo_totale:.2f}")
-    
-    return jsonify({
-        "success": True,
-        "distanza_totale_km": round(distanza_totale_km, 2),
-        "tempo_stimato_minuti": math.ceil(tempo_stimato_minuti),
-        "costo_carburante_euro": round(costo_carburante_euro, 2),
-        "litri_totali": round(litri_totali, 2),
-        "prezzo_litro": prezzo_litro,
-        "prezzo_totale": round(prezzo_totale, 2),
-        "delivery_addresses": delivery_addresses
-    })
+        # Errore generico - ritorna lista vuota
+        return jsonify({"success": True, "results": []})
 
 
-@app.route("/api/trasporti/save-route", methods=["POST"])
+@app.route("/api/trasporti/assign-route", methods=["POST"])
 @login_required
-def save_route():
-    """Salva una tratta di consegna"""
+def api_trasporti_assign_route():
+    """Assegna ordini ad autista e camion, calcola percorso con HERE"""
     if current_user.role != 'trasporti':
         abort(403)
-    
-    nome_tratta = request.form.get("nome_tratta")
-    ordini_seriali = request.form.get("ordini_seriali")
-    indirizzo_partenza = request.form.get("indirizzo_partenza")
-    indirizzi_consegna = request.form.get("indirizzi_consegna")
-    distanza_totale_km = request.form.get("distanza_totale_km")
-    tempo_stimato_minuti = request.form.get("tempo_stimato_minuti")
-    costo_carburante_euro = request.form.get("costo_carburante_euro")
-    autista = request.form.get("autista")
-    mezzo = request.form.get("mezzo")
-    data_consegna = request.form.get("data_consegna")
-    note = request.form.get("note")
-    
-    if not all([nome_tratta, ordini_seriali, indirizzo_partenza]):
-        return jsonify({"error": "Campi obbligatori mancanti"}), 400
-    
-    # Crea la nuova tratta
-    delivery_route = DeliveryRoute(
-        nome_tratta=nome_tratta,
-        ordini_seriali=ordini_seriali,
-        indirizzo_partenza=indirizzo_partenza,
-        indirizzi_consegna=indirizzi_consegna or "",
-        distanza_totale_km=float(distanza_totale_km) if distanza_totale_km else None,
-        tempo_stimato_minuti=math.ceil(float(tempo_stimato_minuti)) if tempo_stimato_minuti else None,
-        costo_carburante_euro=float(costo_carburante_euro) if costo_carburante_euro else None,
-        autista=autista,
-        mezzo=mezzo,
-        data_consegna=datetime.strptime(data_consegna, '%Y-%m-%d').date() if data_consegna else None,
-        note=note,
-        operatore=current_user.username
-    )
-    
-    db.session.add(delivery_route)
-    db.session.commit()
-    
-    return jsonify({
-        "success": True,
-        "id": delivery_route.id,
-        "message": "Tratta salvata con successo"
-    })
-
-
-@app.route("/api/trasporti/fuel-cost", methods=["POST"])
-@login_required
-def update_fuel_cost():
-    """Aggiorna il prezzo del carburante"""
-    if current_user.role != 'trasporti':
-        abort(403)
-    
-    tipo_carburante = request.form.get("tipo_carburante", "diesel")
-    prezzo_litro = request.form.get("prezzo_litro")
-    
-    if not prezzo_litro:
-        return jsonify({"error": "Prezzo obbligatorio"}), 400
     
     try:
-        prezzo_litro = float(prezzo_litro)
-    except ValueError:
-        return jsonify({"error": "Prezzo non valido"}), 400
+        data = request.get_json()
+        ordini_seriali = data.get('ordini_seriali', [])  # Lista di seriali
+        autista = data.get('autista', '').strip()
+        mezzo = data.get('mezzo', '').strip()
+        indirizzo_partenza = data.get('indirizzo_partenza', '').strip()
+        nome_tratta = data.get('nome_tratta', '').strip()
+        
+        if not all([ordini_seriali, autista, mezzo, indirizzo_partenza]):
+            return jsonify({"success": False, "error": "Tutti i campi sono obbligatori"}), 400
+        
+        # Verifica che gli ordini esistano e abbiano indirizzi
+        ordini_validi = []
+        indirizzi_consegna = []
+        
+        for seriale in ordini_seriali:
+            # Verifica ordine nella cache
+            order_exists = any(o["seriale"] == seriale for o in app.config["ORDERS_CACHE"])
+            if not order_exists:
+                continue
+            
+            # Verifica indirizzo di consegna
+            delivery_address = DeliveryAddress.query.filter_by(seriale=seriale).first()
+            if not delivery_address or not delivery_address.coordinate_lat:
+                continue
+            
+            ordini_validi.append(seriale)
+            indirizzi_consegna.append({
+                'seriale': seriale,
+                'indirizzo': f"{delivery_address.indirizzo}, {delivery_address.citta}",
+                'coordinate': f"{delivery_address.coordinate_lat},{delivery_address.coordinate_lng}"
+            })
+        
+        if not ordini_validi:
+            return jsonify({"success": False, "error": "Nessun ordine valido con indirizzo completo"}), 400
+        
+        # Geocoding indirizzo partenza con HERE
+        partenza_lat = None
+        partenza_lng = None
+        try:
+            import requests
+            geocode_url = "https://geocode.search.hereapi.com/v1/geocode"
+            geocode_params = {
+                'q': indirizzo_partenza,
+                'apiKey': HERE_API_KEY,
+                'limit': 1
+            }
+            geocode_response = requests.get(geocode_url, params=geocode_params, timeout=5)
+            if geocode_response.status_code == 200:
+                geocode_data = geocode_response.json()
+                if geocode_data.get('items'):
+                    partenza_lat = float(geocode_data['items'][0]['position']['lat'])
+                    partenza_lng = float(geocode_data['items'][0]['position']['lng'])
+        except Exception as e:
+            print(f"⚠️ Errore geocoding partenza: {e}")
+        
+        if not partenza_lat or not partenza_lng:
+            return jsonify({"success": False, "error": "Impossibile geocodificare l'indirizzo di partenza"}), 400
+        
+        # Calcola percorso ottimizzato con HERE Routing API
+        route_data = None
+        distanza_totale_km = None
+        tempo_stimato_minuti = None
+        
+        try:
+            # Costruisci waypoints: partenza + tutte le destinazioni
+            waypoints = [f"{partenza_lat},{partenza_lng}"]
+            for addr in indirizzi_consegna:
+                waypoints.append(addr['coordinate'])
+            
+            # HERE Routing API v8
+            routing_url = "https://router.hereapi.com/v8/routes"
+            routing_params = {
+                'transportMode': 'car',
+                'origin': waypoints[0],
+                'destination': waypoints[-1],
+                'via': ','.join(waypoints[1:-1]) if len(waypoints) > 2 else '',
+                'return': 'summary',
+                'apiKey': HERE_API_KEY
+            }
+            
+            routing_response = requests.get(routing_url, params=routing_params, timeout=10)
+            if routing_response.status_code == 200:
+                route_data = routing_response.json()
+                if route_data.get('routes'):
+                    route = route_data['routes'][0]
+                    # HERE v8 restituisce summary nelle sections
+                    sections = route.get('sections', [])
+                    if sections:
+                        # Somma distanza e tempo di tutte le sezioni
+                        total_length = 0
+                        total_duration = 0
+                        for section in sections:
+                            summary = section.get('summary', {})
+                            total_length += summary.get('length', 0)
+                            total_duration += summary.get('duration', 0)
+                        distanza_totale_km = total_length / 1000  # Converti da metri a km
+                        tempo_stimato_minuti = total_duration // 60  # Converti da secondi a minuti
+        except Exception as e:
+            print(f"⚠️ Errore calcolo percorso: {e}")
+        
+        # Genera link navigazione HERE WeGo (navigatore completo)
+        navigation_url = None
+        if indirizzi_consegna:
+            # Costruisci URL per HERE WeGo con navigazione turn-by-turn
+            # Formato: https://wego.here.com/directions/mix/[lat1,lng1]/[lat2,lng2],.../[latN,lngN]
+            # Per più destinazioni, usa il formato con waypoints
+            waypoints_list = [f"{partenza_lat},{partenza_lng}"]
+            for addr in indirizzi_consegna:
+                waypoints_list.append(addr['coordinate'])
+            
+            # HERE WeGo: formato deep link corretto secondo documentazione ufficiale
+            # Formato: here.route://mylocation/[coordinate] o here.route://[partenza]/[destinazione]
+            # Questo formato apre direttamente l'app HERE WeGo se installata sul telefono
+            
+            if len(waypoints_list) == 2:
+                # Singola destinazione: usa mylocation per partenza automatica
+                # Formato: here.route://mylocation/[lat],[lng]
+                navigation_url = f"here.route://mylocation/{waypoints_list[1]}"
+            else:
+                # Multiple destinazioni: usa partenza specifica
+                # Formato: here.route://[lat1],[lng1]/[lat2],[lng2]/[lat3],[lng3]...
+                navigation_url = "here.route://" + "/".join(waypoints_list)
+            
+            # Fallback web URL (per desktop o se l'app non è installata)
+            # Questo apre il sito web HERE WeGo
+            if len(waypoints_list) == 2:
+                web_url = f"https://wego.here.com/directions/mix/{waypoints_list[0]}/{waypoints_list[1]}"
+            else:
+                web_url = "https://wego.here.com/directions/mix/" + "/".join(waypoints_list)
+            
+            # Nota: Il deep link "here.route://" apre direttamente l'app HERE WeGo sul telefono
+            # Se l'app non è installata, il browser aprirà il link web come fallback
+        
+        # Salva la tratta nel database
+        route = DeliveryRoute(
+            nome_tratta=nome_tratta or f"Tratta {autista} - {datetime.now().strftime('%Y-%m-%d')}",
+            ordini_seriali=','.join(ordini_validi),
+            indirizzo_partenza=indirizzo_partenza,
+            indirizzi_consegna='|'.join([f"{addr['indirizzo']}" for addr in indirizzi_consegna]),
+            distanza_totale_km=distanza_totale_km,
+            tempo_stimato_minuti=tempo_stimato_minuti,
+            autista=autista,
+            mezzo=mezzo,
+            stato='pianificata',
+            operatore=current_user.username
+        )
+        
+        db.session.add(route)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "route_id": route.id,
+            "distanza_totale_km": round(distanza_totale_km, 2) if distanza_totale_km else None,
+            "tempo_stimato_minuti": tempo_stimato_minuti,
+            "navigation_url": navigation_url,  # Deep link here.route:// per app mobile
+            "navigation_web_url": web_url if 'web_url' in locals() else navigation_url,  # Fallback web
+            "waypoints": waypoints_list if 'waypoints_list' in locals() else [],
+            "message": "Tratta assegnata con successo"
+        })
+        
+    except Exception as e:
+        print(f"❌ Errore assegnazione tratta: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Errore: {str(e)}"}), 500
+
+
+@app.route("/api/trasporti/routes", methods=["GET"])
+@login_required
+def api_trasporti_routes():
+    """Ottiene tutte le tratte assegnate"""
+    if current_user.role != 'trasporti':
+        abort(403)
     
-    # Crea il nuovo record
-    fuel_cost = FuelCost(
-        tipo_carburante=tipo_carburante,
-        prezzo_litro=prezzo_litro,
-        data_aggiornamento=datetime.now().date(),
-        operatore=current_user.username
-    )
+    routes = DeliveryRoute.query.order_by(DeliveryRoute.timestamp.desc()).limit(50).all()
     
-    db.session.add(fuel_cost)
-    db.session.commit()
+    routes_data = []
+    for route in routes:
+        routes_data.append({
+            'id': route.id,
+            'nome_tratta': route.nome_tratta,
+            'ordini_seriali': route.ordini_seriali.split(',') if route.ordini_seriali else [],
+            'autista': route.autista,
+            'mezzo': route.mezzo,
+            'stato': route.stato,
+            'distanza_totale_km': route.distanza_totale_km,
+            'tempo_stimato_minuti': route.tempo_stimato_minuti,
+            'indirizzo_partenza': route.indirizzo_partenza,
+            'timestamp': route.timestamp.isoformat() if route.timestamp else None
+        })
     
     return jsonify({
         "success": True,
-        "message": f"Prezzo {tipo_carburante} aggiornato a €{prezzo_litro}/l"
+        "routes": routes_data
+    })
+
+
+@app.route("/api/trasporti/route-detail/<int:route_id>", methods=["GET"])
+@login_required
+def api_trasporti_route_detail(route_id):
+    """Ottiene i dettagli di una tratta per il navigatore con coordinate geocodificate e percorso calcolato"""
+    if current_user.role != 'trasporti':
+        abort(403)
+    
+    route = DeliveryRoute.query.get_or_404(route_id)
+    
+    # Geocodifica indirizzo partenza dal backend (evita CORS)
+    partenza_coordinate = None
+    if route.indirizzo_partenza:
+        try:
+            import requests
+            geocode_url = "https://geocode.search.hereapi.com/v1/geocode"
+            geocode_params = {
+                'q': route.indirizzo_partenza,
+                'apiKey': HERE_API_KEY,
+                'limit': 1
+            }
+            geocode_response = requests.get(geocode_url, params=geocode_params, timeout=5)
+            if geocode_response.status_code == 200:
+                geocode_data = geocode_response.json()
+                if geocode_data.get('items'):
+                    partenza_coordinate = {
+                        'lat': float(geocode_data['items'][0]['position']['lat']),
+                        'lng': float(geocode_data['items'][0]['position']['lng'])
+                    }
+        except Exception as e:
+            print(f"⚠️ Errore geocoding partenza: {e}")
+    
+    # Geocodifica indirizzi consegna dal backend
+    indirizzi_consegna_coordinate = []
+    seriali = route.ordini_seriali.split(',') if route.ordini_seriali else []
+    for seriale in seriali:
+        delivery_address = DeliveryAddress.query.filter_by(seriale=seriale).first()
+        if delivery_address:
+            if delivery_address.coordinate_lat and delivery_address.coordinate_lng:
+                # Usa coordinate già salvate
+                indirizzi_consegna_coordinate.append({
+                    'seriale': seriale,
+                    'indirizzo': f"{delivery_address.indirizzo}, {delivery_address.citta}",
+                    'coordinate': {
+                        'lat': delivery_address.coordinate_lat,
+                        'lng': delivery_address.coordinate_lng
+                    }
+                })
+            else:
+                # Geocodifica se non ci sono coordinate
+                try:
+                    import requests
+                    indirizzo_completo = f"{delivery_address.indirizzo}, {delivery_address.citta}, {delivery_address.provincia}"
+                    geocode_url = "https://geocode.search.hereapi.com/v1/geocode"
+                    geocode_params = {
+                        'q': indirizzo_completo,
+                        'apiKey': HERE_API_KEY,
+                        'limit': 1
+                    }
+                    geocode_response = requests.get(geocode_url, params=geocode_params, timeout=5)
+                    if geocode_response.status_code == 200:
+                        geocode_data = geocode_response.json()
+                        if geocode_data.get('items'):
+                            indirizzi_consegna_coordinate.append({
+                                'seriale': seriale,
+                                'indirizzo': indirizzo_completo,
+                                'coordinate': {
+                                    'lat': float(geocode_data['items'][0]['position']['lat']),
+                                    'lng': float(geocode_data['items'][0]['position']['lng'])
+                                }
+                            })
+                except Exception as e:
+                    print(f"⚠️ Errore geocoding indirizzo {seriale}: {e}")
+    
+    # Calcola percorso dal backend (evita CORS)
+    route_data = None
+    route_shape = None
+    route_instructions = []
+    route_distanza_km = None
+    route_tempo_minuti = None
+    
+    if partenza_coordinate and indirizzi_consegna_coordinate:
+        try:
+            import requests
+            # Costruisci waypoints
+            waypoints = [f"{partenza_coordinate['lat']},{partenza_coordinate['lng']}"]
+            for addr in indirizzi_consegna_coordinate:
+                waypoints.append(f"{addr['coordinate']['lat']},{addr['coordinate']['lng']}")
+            
+            # HERE Routing API v8 (REST)
+            routing_url = "https://router.hereapi.com/v8/routes"
+            routing_params = {
+                'transportMode': 'car',
+                'origin': waypoints[0],
+                'destination': waypoints[-1],
+                'via': ','.join(waypoints[1:-1]) if len(waypoints) > 2 else '',
+                'return': 'polyline,actions,instructions,summary',
+                'apiKey': HERE_API_KEY
+            }
+            
+            routing_response = requests.get(routing_url, params=routing_params, timeout=10)
+            if routing_response.status_code == 200:
+                route_data = routing_response.json()
+                print(f"🔍 HERE Routing API Response Status: {routing_response.status_code}")
+                
+                if route_data.get('routes'):
+                    route_obj = route_data['routes'][0]
+                    
+                    # Estrai summary per distanza e tempo
+                    if route_obj.get('sections'):
+                        total_length = 0
+                        total_duration = 0
+                        
+                        for idx, section in enumerate(route_obj['sections']):
+                            # Estrai summary (distanza e tempo)
+                            summary = section.get('summary', {})
+                            if summary:
+                                total_length += summary.get('length', 0)  # in metri
+                                total_duration += summary.get('duration', 0)  # in secondi
+                            
+                            # Estrai polyline (formato flexible polyline di HERE)
+                            if section.get('polyline'):
+                                route_shape = section['polyline']
+                                print(f"✅ Polyline trovato nella sezione {idx}")
+                            
+                            # Estrai istruzioni turn-by-turn
+                            if section.get('actions'):
+                                for action in section['actions']:
+                                    # HERE API v8 usa 'instruction' come oggetto con 'text'
+                                    instruction_obj = action.get('instruction', {})
+                                    if isinstance(instruction_obj, dict):
+                                        instruction_text = instruction_obj.get('text', '')
+                                    else:
+                                        instruction_text = str(instruction_obj) if instruction_obj else ''
+                                    
+                                    if instruction_text:
+                                        route_instructions.append({
+                                            'instruction': instruction_text,
+                                            'length': action.get('length', 0),
+                                            'duration': action.get('duration', 0)
+                                        })
+                        
+                        # Calcola distanza e tempo totali dalla risposta API
+                        if total_length > 0:
+                            route_distanza_km = total_length / 1000  # Converti da metri a km
+                            route_tempo_minuti = total_duration // 60  # Converti da secondi a minuti
+                            print(f"✅ Distanza calcolata: {route_distanza_km:.2f} km, Tempo: {route_tempo_minuti} minuti")
+                        else:
+                            route_distanza_km = None
+                            route_tempo_minuti = None
+                    else:
+                        route_distanza_km = None
+                        route_tempo_minuti = None
+                        print(f"⚠️ Nessuna sezione trovata nella route")
+                else:
+                    route_distanza_km = None
+                    route_tempo_minuti = None
+                    print(f"⚠️ Nessuna route nella risposta")
+            else:
+                route_distanza_km = None
+                route_tempo_minuti = None
+                print(f"❌ HERE Routing API Error: {routing_response.status_code}")
+                print(f"❌ Response: {routing_response.text[:200]}")
+        except Exception as e:
+            print(f"⚠️ Errore calcolo percorso backend: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    return jsonify({
+        "success": True,
+        "route": {
+            'id': route.id,
+            'nome_tratta': route.nome_tratta,
+            'ordini_seriali': seriali,
+            'autista': route.autista,
+            'mezzo': route.mezzo,
+            'stato': route.stato,
+            'distanza_totale_km': route_distanza_km if route_distanza_km is not None else route.distanza_totale_km,
+            'tempo_stimato_minuti': route_tempo_minuti if route_tempo_minuti is not None else route.tempo_stimato_minuti,
+            'indirizzo_partenza': route.indirizzo_partenza,
+            'partenza_coordinate': partenza_coordinate,
+            'indirizzi_consegna': indirizzi_consegna_coordinate,
+            'route_shape': route_shape,  # Polyline del percorso già calcolato
+            'route_instructions': route_instructions  # Indicazioni turn-by-turn già calcolate
+        }
     })
 
 
