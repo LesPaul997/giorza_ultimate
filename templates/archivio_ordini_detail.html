@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Archivio · Ordine {{ arch.seriale }}{% endblock %}
+
+{% block content %}
+{% set h = snapshot.header %}
+{% set righe = snapshot.righe %}
+{% set status = snapshot.status %}
+{% set status_by_reparto = snapshot.status_by_reparto %}
+{% set notes = snapshot.notes %}
+{% set delivery_addresses = snapshot.delivery_addresses %}
+{% set attachments = snapshot.attachments %}
+{% set partial_residues = snapshot.partial_residues %}
+
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <p class="text-xs text-amber-600 font-medium uppercase tracking-wide">Backup ordini 2025</p>
+        <h1 class="text-2xl font-bold text-gray-900 mt-1">{{ h.nome_cliente or '—' }}</h1>
+        <div class="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
+          <span><strong>Numero ordine:</strong> {{ h.numero_ordine or '—' }}</span>
+          <span><strong>Data ordine:</strong> {{ h.data_ordine or '—' }}</span>
+          <span><strong>Seriale:</strong> {{ arch.seriale }}</span>
+        </div>
+        {% if h.ritiro %}
+        <div class="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">{{ h.ritiro }}</div>
+        {% endif %}
+        {% if h.note_cliente %}
+        <p class="mt-2 text-sm text-gray-600"><strong>Note cliente:</strong> {{ h.note_cliente }}</p>
+        {% endif %}
+      </div>
+      <a href="{{ url_for('archivio_ordini_list') }}"
+         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Torna all'archivio
+      </a>
+    </div>
+  </div>
+
+  <!-- Stato -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Stato (al momento dell'archivio)</h2>
+    <p class="text-sm text-gray-600">Generale: <strong>{{ status.status }}</strong>
+      {% if status.operatore %}({{ status.operatore }}){% endif %}
+      {% if status.timestamp %} · {{ status.timestamp }}{% endif %}
+    </p>
+    {% if status_by_reparto %}
+    <div class="mt-3 flex flex-wrap gap-2">
+      {% for rep, st in status_by_reparto.items() %}
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+        {{ rep }}: {{ st.status }}{% if st.operatore %} ({{ st.operatore }}){% endif %}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Righe -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-lg font-semibold text-gray-900">Righe ordine</h2>
+      <p class="text-sm text-gray-500 mt-1">Quantità dal gestionale e quantità confermate in app (consegnate al cliente)</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Codice / Descrizione</th>
+            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantità gestionale</th>
+            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantità confermata (app)</th>
+            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Confermata</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">U.M.</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reparto</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for r in righe %}
+          <tr class="{% if r.confermata %}bg-green-50 border-l-4 border-green-400{% elif r.removed %}bg-red-50 text-gray-500{% elif r.unavailable %}bg-gray-100{% endif %}">
+            <td class="px-4 py-2 text-sm">
+              {{ r.codice_articolo }}
+              {% if r.descrizione_articolo %}<br><span class="text-gray-600">{{ r.descrizione_articolo }}</span>{% endif %}
+              {% if r.removed %}<span class="ml-2 text-red-600 text-xs">(rimossa)</span>{% endif %}
+              {% if r.is_added %}<span class="ml-2 text-blue-600 text-xs">(aggiunta in app)</span>{% endif %}
+              {% if r.unavailable and r.substitution_text %}<span class="ml-2 text-amber-600 text-xs">Sostituzione: {{ r.substitution_text }}</span>{% endif %}
+            </td>
+            <td class="px-4 py-2 text-sm text-right text-gray-700">
+              {{ r.quantita_originale if r.quantita_originale is not none and r.quantita_originale != '' else (r.quantita | default('—')) }}
+            </td>
+            <td class="px-4 py-2 text-sm text-right {% if r.confermata %}font-semibold text-green-700{% endif %}">
+              {{ r.quantita_confermata if r.quantita_confermata is not none and r.quantita_confermata != '' else '—' }}
+            </td>
+            <td class="px-4 py-2 text-center">
+              {% if r.confermata is defined and r.confermata %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Sì</span>
+              {% if r.edit_operatore %}<br><span class="text-xs text-gray-500">{{ r.edit_operatore }}</span>{% endif %}
+              {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">No</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-sm">
+              {% if r.confermata and r.unita_misura_confermata %}{{ r.unita_misura_confermata }}{% else %}{{ r.unita_misura or '—' }}{% endif %}
+            </td>
+            <td class="px-4 py-2 text-sm">{{ r.codice_reparto or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if partial_residues %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Residui parziali</h2>
+    <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+      {% for pr in partial_residues %}
+      <li>{{ pr.reparto }}: {{ pr.codice_articolo }} — {{ pr.residuo_quantita }} {{ pr.unita_misura }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if notes %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Note</h2>
+    <ul class="space-y-2">
+      {% for n in notes %}
+      <li class="text-sm border-l-4 border-blue-200 pl-3 py-1">
+        <span class="text-gray-500">{{ n.operatore }}{% if n.timestamp %} · {{ n.timestamp }}{% endif %}</span><br>
+        {{ n.nota }}{% if n.articolo %} <span class="text-gray-400">(articolo: {{ n.articolo }})</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if delivery_addresses %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Indirizzi di consegna</h2>
+    <ul class="space-y-2 text-sm">
+      {% for a in delivery_addresses %}
+      <li>
+        {{ a.indirizzo }}, {{ a.cap }} {{ a.citta }} ({{ a.provincia }})
+        {% if a.note_indirizzo %}<br><span class="text-gray-500">{{ a.note_indirizzo }}</span>{% endif %}
+        <span class="text-gray-400"> — {{ a.operatore }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if attachments %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Allegati</h2>
+    <ul class="space-y-1 text-sm text-gray-600">
+      {% for a in attachments %}
+      <li>{{ a.filename }}{% if a.operatore %} ({{ a.operatore }}){% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app import app, db
-from models import User, OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, ArticoloReparto, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue
+from models import User, OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, ArticoloReparto, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, OrderArchive
 
 def init_database():
     """Inizializza il database PostgreSQL"""

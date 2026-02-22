@@ -38,7 +38,9 @@ DEFAULT_CONNSTR = (
 )
 
 CONN_STR = os.getenv("MSSQL_CONNSTRING_DEMO", DEFAULT_CONNSTR)
-# Data di partenza per import ordini (YYYY-MM-DD). Default: 2025-09-01
+# Data di partenza per import ordini (YYYY-MM-DD). Default: 2025-09-01.
+# Dopo aver eseguito l'archivio 2025 dall'app (Archivio ordini → Esegui archivio 2025),
+# imposta ORDERS_FROM_DATE=2026-01-01 nel .env e riavvia per velocizzare il sistema.
 ORDERS_FROM_DATE = os.getenv("ORDERS_FROM_DATE", "2025-09-01")
 # print("Conn string:", CONN_STR)  # Rimosso per ridurre log
 

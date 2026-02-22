@@ -339,7 +339,7 @@ class NoteAppunto(db.Model):
 class AnnuncioUrgente(db.Model):
     """Annunci urgenti che scorrono nella navbar"""
     __tablename__ = 'annunci_urgenti'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     titolo = db.Column(db.String(200), nullable=False)
     messaggio = db.Column(db.Text, nullable=False)
@@ -347,6 +347,29 @@ class AnnuncioUrgente(db.Model):
     creato_da = db.Column(db.String(80), nullable=False)  # username
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)  # Indice per ordinamento
     scadenza = db.Column(db.DateTime, nullable=True, index=True)  # Indice per query scadenza
-    
+
     def __repr__(self):
         return f'<AnnuncioUrgente {self.titolo} {self.attivo}>'
+
+
+# ============================================
+# ARCHIVIO ORDINI (backup fino al 31/12/2025)
+# ============================================
+
+class OrderArchive(db.Model):
+    """
+    Snapshot completo di un ordine archiviato (fino al 31/12/2025).
+    Contiene ordine + tutte le modifiche app (stati, note, indirizzi, righe modificate, ecc.)
+    """
+    __tablename__ = 'order_archive'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seriale = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    numero_ordine = db.Column(db.String(20), nullable=True, index=True)
+    data_ordine = db.Column(db.Date, nullable=True, index=True)  # Per filtri e ordinamento
+    nome_cliente = db.Column(db.String(200), nullable=True, index=True)  # Per ricerca
+    archived_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    snapshot = db.Column(db.Text, nullable=False)  # JSON: header, righe, status, note, indirizzi, ecc.
+
+    def __repr__(self):
+        return f'<OrderArchive {self.seriale} {self.data_ordine}>'

@@ -16,13 +16,14 @@ Principali correzioni / miglioramenti
 from __future__ import annotations
 
 import csv
+import json
 import math
 import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import pyodbc
 
 from flask import (
@@ -80,7 +81,7 @@ app.config.update(
 )
 
 # Lazy import del modello: evita dipendenze circolari con db.init_app
-from models import OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, User, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, ArticoloReparto, CalendarioAppuntamento, TodoItem, NoteAppunto, AnnuncioUrgente, db  # noqa: E402  pylint: disable=wrong-import-position
+from models import OrderEdit, OrderStatus, OrderStatusByReparto, OrderRead, OrderNote, ChatMessage, User, ModifiedOrderLine, UnavailableLine, OrderAttachment, DeliveryAddress, DeliveryRoute, FuelCost, PartialOrderResidue, ArticoloReparto, CalendarioAppuntamento, TodoItem, NoteAppunto, AnnuncioUrgente, OrderArchive, db  # noqa: E402  pylint: disable=wrong-import-position
 
 db.init_app(app)
 
@@ -560,6 +561,210 @@ def get_reparto_by_code(codice_reparto: str) -> str:
     return reparti.get(codice_reparto, codice_reparto)
 
 
+def _serialize_for_snapshot(obj):
+    """Converte datetime/date in stringhe per JSON snapshot."""
+    if hasattr(obj, 'isoformat'):
+        return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _serialize_for_snapshot(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serialize_for_snapshot(x) for x in obj]
+    return obj
+
+
+def _build_order_snapshot(seriale: str):
+    """Costruisce lo snapshot di un ordine (cache + DB). Ritorna (snapshot_dict, data_ordine_date) o (None, None)."""
+    orders = app.config.get("ORDERS_CACHE", [])
+    righe = [o for o in orders if o.get("seriale") == seriale]
+    if not righe:
+        return None, None
+
+    with app.app_context():
+        # Header dal primo record
+        h = righe[0]
+        data_ordine_raw = h.get("data_ordine")
+        data_ordine_date = None
+        if hasattr(data_ordine_raw, 'date'):
+            data_ordine_date = data_ordine_raw.date() if hasattr(data_ordine_raw, 'date') else data_ordine_raw
+        elif isinstance(data_ordine_raw, str):
+            try:
+                for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y'):
+                    try:
+                        data_ordine_date = datetime.strptime(data_ordine_raw.split()[0], fmt).date()
+                        break
+                    except ValueError:
+                        continue
+            except Exception:
+                pass
+
+        # Righe: raggruppa per articolo
+        articoli_raggruppati = {}
+        for r in righe:
+            codice = r.get("codice_articolo", "")
+            if codice not in articoli_raggruppati:
+                articoli_raggruppati[codice] = dict(r)
+            else:
+                articoli_raggruppati[codice]["quantita"] = (articoli_raggruppati[codice].get("quantita") or 0) + (r.get("quantita") or 0)
+        righe_list = list(articoli_raggruppati.values())
+
+        applied_edits = (
+            OrderEdit.query.filter_by(seriale=seriale, applied=True)
+            .order_by(OrderEdit.timestamp.desc())
+            .all()
+        )
+        edited_by_articolo = {e.articolo: e for e in applied_edits}
+        for r in righe_list:
+            r["quantita_originale"] = r.get("quantita")
+            edit = edited_by_articolo.get(r.get("codice_articolo"))
+            if edit:
+                r["confermata"] = True
+                r["quantita_confermata"] = edit.quantita_nuova
+                r["unita_misura_confermata"] = edit.unita_misura
+                r["edit_operatore"] = edit.operatore
+                r["edit_timestamp"] = edit.timestamp
+            else:
+                r["confermata"] = False
+                r["quantita_confermata"] = None
+                r["unita_misura_confermata"] = None
+                r["edit_operatore"] = None
+                r["edit_timestamp"] = None
+        existing_codes = {r.get("codice_articolo", "") for r in righe_list}
+        for codice, edit in edited_by_articolo.items():
+            if codice not in existing_codes:
+                righe_list.append({
+                    "codice_articolo": codice,
+                    "descrizione_articolo": f"Aggiunta in app: {codice}",
+                    "quantita": 0,
+                    "quantita_originale": None,
+                    "confermata": True,
+                    "quantita_confermata": edit.quantita_nuova,
+                    "unita_misura": edit.unita_misura,
+                    "unita_misura_confermata": edit.unita_misura,
+                    "edit_operatore": edit.operatore,
+                    "edit_timestamp": edit.timestamp,
+                    "codice_reparto": None,
+                    "removed": False,
+                    "is_added": True,
+                })
+                existing_codes.add(codice)
+
+        # Unavailable
+        for ul in UnavailableLine.query.filter_by(seriale=seriale).all():
+            if not ul.unavailable:
+                continue
+            for r in righe_list:
+                if r.get("codice_articolo") == ul.codice_articolo:
+                    r["unavailable"] = True
+                    r["substitution_text"] = ul.substitution_text or ""
+
+        # Righe modificate/cancellate dal DB
+        for db_line in ModifiedOrderLine.query.filter_by(seriale=seriale).all():
+            if not db_line.removed:
+                continue
+            righe_list.append({
+                "codice_articolo": db_line.codice_articolo,
+                "descrizione_articolo": db_line.descrizione_articolo,
+                "descrizione_supplementare": db_line.descrizione_supplementare,
+                "quantita": db_line.quantita,
+                "unita_misura": db_line.unita_misura,
+                "unita_misura_2": db_line.unita_misura_2,
+                "quantita_um2": db_line.quantita_um2,
+                "operatore_conversione": db_line.operatore_conversione,
+                "fattore_conversione": db_line.fattore_conversione,
+                "prezzo_unitario": db_line.prezzo_unitario,
+                "codice_reparto": db_line.codice_reparto,
+                "numero_ordine": db_line.numero_ordine,
+                "nome_cliente": db_line.nome_cliente,
+                "ritiro": db_line.ritiro,
+                "data_arrivo": db_line.data_arrivo,
+                "removed": True,
+                "quantita_originale": db_line.quantita,
+                "confermata": False,
+                "quantita_confermata": None,
+                "unita_misura_confermata": None,
+                "edit_operatore": None,
+                "edit_timestamp": None,
+            })
+
+        # Stato generale
+        status_rec = OrderStatus.query.filter_by(seriale=seriale).first()
+        status_general = {
+            'status': status_rec.status if status_rec else 'nuovo',
+            'operatore': status_rec.operatore if status_rec else None,
+            'timestamp': status_rec.timestamp if status_rec else None,
+        }
+        status_by_reparto = get_ordine_status_by_reparto(seriale)
+
+        # Note
+        notes = []
+        for n in OrderNote.query.filter_by(seriale=seriale).order_by(OrderNote.timestamp).all():
+            notes.append({
+                'articolo': n.articolo,
+                'operatore': n.operatore,
+                'nota': n.nota,
+                'timestamp': n.timestamp,
+            })
+
+        # Indirizzi consegna
+        delivery_addresses = []
+        for a in DeliveryAddress.query.filter_by(seriale=seriale).all():
+            delivery_addresses.append({
+                'indirizzo': a.indirizzo,
+                'citta': a.citta,
+                'provincia': a.provincia,
+                'cap': a.cap,
+                'note_indirizzo': a.note_indirizzo,
+                'operatore': a.operatore,
+                'timestamp': a.timestamp,
+            })
+
+        # Allegati (solo metadati)
+        attachments = []
+        for att in OrderAttachment.query.filter_by(seriale=seriale).all():
+            attachments.append({
+                'filename': att.original_filename,
+                'file_path': att.file_path,
+                'mime_type': att.mime_type,
+                'operatore': att.operatore,
+                'note': att.note,
+                'timestamp': att.timestamp,
+            })
+
+        # Residui parziali
+        partial_residues = []
+        for pr in PartialOrderResidue.query.filter_by(seriale=seriale).all():
+            partial_residues.append({
+                'reparto': pr.reparto,
+                'codice_articolo': pr.codice_articolo,
+                'descrizione_articolo': pr.descrizione_articolo,
+                'residuo_quantita': pr.residuo_quantita,
+                'unita_misura': pr.unita_misura,
+            })
+
+        snapshot = {
+            'header': {
+                'seriale': seriale,
+                'numero_ordine': h.get('numero_ordine'),
+                'nome_cliente': h.get('nome_cliente') or h.get('cliente_codice'),
+                'data_ordine': h.get('data_ordine'),
+                'ritiro': h.get('ritiro'),
+                'note_cliente': h.get('note_cliente'),
+                'data_arrivo': h.get('data_arrivo'),
+            },
+            'righe': righe_list,
+            'status': status_general,
+            'status_by_reparto': status_by_reparto,
+            'notes': notes,
+            'delivery_addresses': delivery_addresses,
+            'attachments': attachments,
+            'partial_residues': partial_residues,
+        }
+        snapshot = _serialize_for_snapshot(snapshot)
+        return snapshot, data_ordine_date
+
+
 # ------------------------------------------------------------------
 # 5) Scheduler (avviato una sola volta)
 # ------------------------------------------------------------------
@@ -704,6 +909,152 @@ def home():
     }
     
     return render_template("home.html", role=current_user.role, counters=counters)
+
+
+# ------------------------------------------------------------------
+# Archivio ordini
+# ------------------------------------------------------------------
+
+@app.route("/archivio-ordini")
+@login_required
+def archivio_ordini_list():
+    """Pagina elenco ordini archiviati."""
+    return render_template("archivio_ordini_list.html")
+
+
+@app.route("/api/archivio/orders")
+@login_required
+def api_archivio_orders():
+    """API elenco ordini archiviati (paginated, ricerca)."""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+    per_page = min(max(per_page, 5), 100)
+    q = request.args.get("q", "").strip()
+
+    query = OrderArchive.query
+    if q:
+        q_like = f"%{q}%"
+        query = query.filter(
+            db.or_(
+                OrderArchive.seriale.ilike(q_like),
+                OrderArchive.numero_ordine.ilike(q_like),
+                OrderArchive.nome_cliente.ilike(q_like),
+            )
+        )
+    query = query.order_by(OrderArchive.data_ordine.desc().nullslast(), OrderArchive.numero_ordine.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    items = []
+    for arch in pagination.items:
+        items.append({
+            "seriale": arch.seriale,
+            "numero_ordine": arch.numero_ordine,
+            "data_ordine": arch.data_ordine.isoformat() if arch.data_ordine else None,
+            "nome_cliente": arch.nome_cliente,
+            "archived_at": arch.archived_at.isoformat() if arch.archived_at else None,
+        })
+    return jsonify({
+        "success": True,
+        "orders": items,
+        "total": pagination.total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": pagination.pages,
+    })
+
+
+@app.route("/api/archivio/run-2025", methods=["POST"])
+@login_required
+def api_archivio_run_2025():
+    """Esegue l'archivio ordini dalla cache corrente."""
+    from datetime import date as date_type
+    cutoff = date_type(2025, 12, 31)
+    orders = app.config.get("ORDERS_CACHE", [])
+    unique_seriali = {}
+    for o in orders:
+        seriale = o.get("seriale")
+        if not seriale:
+            continue
+        data_raw = o.get("data_ordine")
+        try:
+            if hasattr(data_raw, 'date'):
+                d = data_raw.date()
+            elif isinstance(data_raw, str):
+                d = None
+                for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y'):
+                    try:
+                        d = datetime.strptime(data_raw.split()[0], fmt).date()
+                        break
+                    except (ValueError, AttributeError):
+                        continue
+                if d is None:
+                    continue
+            else:
+                continue
+            if d <= cutoff and seriale not in unique_seriali:
+                unique_seriali[seriale] = {
+                    "numero_ordine": o.get("numero_ordine"),
+                    "nome_cliente": o.get("nome_cliente") or o.get("cliente_codice"),
+                    "data_ordine": d,
+                }
+        except Exception:
+            continue
+
+    archived = 0
+    updated = 0
+    errors = []
+    with app.app_context():
+        for seriale, info in unique_seriali.items():
+            snapshot, data_ordine_date = _build_order_snapshot(seriale)
+            if snapshot is None:
+                errors.append(f"Ordine {seriale}: non in cache")
+                continue
+            try:
+                rec = OrderArchive.query.filter_by(seriale=seriale).first()
+                if rec:
+                    rec.numero_ordine = info.get("numero_ordine")
+                    rec.data_ordine = info.get("data_ordine") or data_ordine_date
+                    rec.nome_cliente = info.get("nome_cliente")
+                    rec.snapshot = json.dumps(snapshot, ensure_ascii=False)
+                    db.session.commit()
+                    updated += 1
+                else:
+                    rec = OrderArchive(
+                        seriale=seriale,
+                        numero_ordine=info.get("numero_ordine"),
+                        data_ordine=info.get("data_ordine") or data_ordine_date,
+                        nome_cliente=info.get("nome_cliente"),
+                        snapshot=json.dumps(snapshot, ensure_ascii=False),
+                    )
+                    db.session.add(rec)
+                    db.session.commit()
+                    archived += 1
+            except Exception as e:
+                db.session.rollback()
+                errors.append(f"Ordine {seriale}: {e}")
+    return jsonify({
+        "success": True,
+        "archived": archived,
+        "updated": updated,
+        "total_candidates": len(unique_seriali),
+        "errors": errors[:20],
+    })
+
+
+@app.route("/archivio-ordini/<seriale>")
+@login_required
+def archivio_ordini_detail(seriale):
+    """Dettaglio read-only di un ordine archiviato."""
+    arch = OrderArchive.query.filter_by(seriale=seriale).first()
+    if not arch:
+        abort(404)
+    try:
+        snapshot = json.loads(arch.snapshot)
+    except Exception:
+        abort(404)
+    return render_template("archivio_ordini_detail.html", arch=arch, snapshot=snapshot)
+
+
+# ------------------------------------------------------------------
 
 
 @app.route("/api/orders/search")
