@@ -118,22 +118,34 @@
     const resultEl = document.getElementById('archiveRunResult');
     btn.disabled = true;
     resultEl.classList.remove('hidden');
-    resultEl.innerHTML = 'Archiviazione in corso...';
-    fetch('/api/archivio/run-2025', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
-      .then(r => r.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.success) {
-          resultEl.innerHTML = `Archiviati: <strong>${data.archived}</strong>, aggiornati: ${data.updated || 0}, candidati: ${data.total_candidates}. ${(data.errors && data.errors.length) ? 'Errori: ' + data.errors.join('; ') : ''}`;
-          loadList(1, '');
-        } else {
-          resultEl.innerHTML = '<span class="text-red-600">' + (data.errors && data.errors[0] ? data.errors[0] : 'Errore') + '</span>';
-        }
-      })
-      .catch(() => {
-        btn.disabled = false;
-        resultEl.innerHTML = '<span class="text-red-600">Errore di rete</span>';
-      });
+    let totalArchived = 0, totalUpdated = 0, offset = 0;
+    function runChunk() {
+      resultEl.innerHTML = 'Archiviazione in corso... (elaborati ' + offset + ' ordini)';
+      fetch('/api/archivio/run-2025?offset=' + offset + '&limit=40', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) {
+            btn.disabled = false;
+            resultEl.innerHTML = '<span class="text-red-600">' + (data.errors && data.errors[0] ? data.errors[0] : 'Errore') + '</span>';
+            return;
+          }
+          totalArchived += data.archived || 0;
+          totalUpdated += data.updated || 0;
+          offset = data.next_offset || 0;
+          if (data.done) {
+            btn.disabled = false;
+            resultEl.innerHTML = 'Archiviazione completata. Archiviati: <strong>' + totalArchived + '</strong>, aggiornati: ' + totalUpdated + ', totale candidati: ' + (data.total_candidates || 0) + (data.errors && data.errors.length ? '. Errori: ' + data.errors.join('; ') : '');
+            loadList(1, '');
+            return;
+          }
+          runChunk();
+        })
+        .catch(() => {
+          btn.disabled = false;
+          resultEl.innerHTML = '<span class="text-red-600">Errore di rete</span>';
+        });
+    }
+    runChunk();
   });
 
   loadList(1, '');

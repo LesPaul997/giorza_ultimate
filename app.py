@@ -976,9 +976,12 @@ def api_archivio_orders():
 @app.route("/api/archivio/run-2025", methods=["POST"])
 @login_required
 def api_archivio_run_2025():
-    """Esegue l'archivio ordini dalla cache corrente."""
+    """Esegue l'archivio ordini a chunk per evitare timeout (max 40 per richiesta)."""
     try:
         from datetime import date as date_type
+        offset = request.args.get("offset", 0, type=int)
+        limit = min(request.args.get("limit", 40, type=int), 40)
+        limit = max(1, limit)
         cutoff = date_type(2025, 12, 31)
         orders = app.config.get("ORDERS_CACHE", [])
         unique_seriali = {}
@@ -1011,11 +1014,18 @@ def api_archivio_run_2025():
             except Exception:
                 continue
 
+        seriali_list = sorted(unique_seriali.keys())
+        total_candidates = len(seriali_list)
+        batch = seriali_list[offset:offset + limit]
+        next_offset = offset + len(batch)
+        done = next_offset >= total_candidates
+
         archived = 0
         updated = 0
         errors = []
         with app.app_context():
-            for seriale, info in unique_seriali.items():
+            for seriale in batch:
+                info = unique_seriali[seriale]
                 snapshot, data_ordine_date = _build_order_snapshot(seriale)
                 if snapshot is None:
                     errors.append(f"Ordine {seriale}: non in cache")
@@ -1047,7 +1057,9 @@ def api_archivio_run_2025():
             "success": True,
             "archived": archived,
             "updated": updated,
-            "total_candidates": len(unique_seriali),
+            "total_candidates": total_candidates,
+            "next_offset": next_offset,
+            "done": done,
             "errors": errors[:20],
         })
     except Exception as e:
@@ -1056,6 +1068,8 @@ def api_archivio_run_2025():
             "archived": 0,
             "updated": 0,
             "total_candidates": 0,
+            "next_offset": 0,
+            "done": True,
             "errors": ["Archivio non disponibile. Esegui l'inizializzazione del database (init_render_db.py)."],
         }), 200
 
