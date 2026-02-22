@@ -61,7 +61,8 @@
       .then(r => r.json())
       .then(data => {
         if (!data.success) {
-          document.getElementById('archiveList').innerHTML = '<p class="text-red-600">Errore caricamento.</p>';
+          const msg = data.error || 'Errore caricamento.';
+          document.getElementById('archiveList').innerHTML = '<p class="text-red-600">' + msg + '</p>';
           return;
         }
         currentPage = data.page;
@@ -126,7 +127,7 @@
           resultEl.innerHTML = `Archiviati: <strong>${data.archived}</strong>, aggiornati: ${data.updated || 0}, candidati: ${data.total_candidates}. ${(data.errors && data.errors.length) ? 'Errori: ' + data.errors.join('; ') : ''}`;
           loadList(1, '');
         } else {
-          resultEl.innerHTML = '<span class="text-red-600">Errore</span>';
+          resultEl.innerHTML = '<span class="text-red-600">' + (data.errors && data.errors[0] ? data.errors[0] : 'Errore') + '</span>';
         }
       })
       .catch(() => {

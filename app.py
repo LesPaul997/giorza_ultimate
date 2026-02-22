@@ -926,118 +926,138 @@ def archivio_ordini_list():
 @login_required
 def api_archivio_orders():
     """API elenco ordini archiviati (paginated, ricerca)."""
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 20, type=int)
-    per_page = min(max(per_page, 5), 100)
-    q = request.args.get("q", "").strip()
+    try:
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 20, type=int)
+        per_page = min(max(per_page, 5), 100)
+        q = request.args.get("q", "").strip()
 
-    query = OrderArchive.query
-    if q:
-        q_like = f"%{q}%"
-        query = query.filter(
-            db.or_(
-                OrderArchive.seriale.ilike(q_like),
-                OrderArchive.numero_ordine.ilike(q_like),
-                OrderArchive.nome_cliente.ilike(q_like),
+        query = OrderArchive.query
+        if q:
+            q_like = f"%{q}%"
+            query = query.filter(
+                db.or_(
+                    OrderArchive.seriale.ilike(q_like),
+                    OrderArchive.numero_ordine.ilike(q_like),
+                    OrderArchive.nome_cliente.ilike(q_like),
+                )
             )
-        )
-    query = query.order_by(OrderArchive.data_ordine.desc().nullslast(), OrderArchive.numero_ordine.desc())
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    items = []
-    for arch in pagination.items:
-        items.append({
-            "seriale": arch.seriale,
-            "numero_ordine": arch.numero_ordine,
-            "data_ordine": arch.data_ordine.isoformat() if arch.data_ordine else None,
-            "nome_cliente": arch.nome_cliente,
-            "archived_at": arch.archived_at.isoformat() if arch.archived_at else None,
+        query = query.order_by(OrderArchive.data_ordine.desc().nullslast(), OrderArchive.numero_ordine.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        items = []
+        for arch in pagination.items:
+            items.append({
+                "seriale": arch.seriale,
+                "numero_ordine": arch.numero_ordine,
+                "data_ordine": arch.data_ordine.isoformat() if arch.data_ordine else None,
+                "nome_cliente": arch.nome_cliente,
+                "archived_at": arch.archived_at.isoformat() if arch.archived_at else None,
+            })
+        return jsonify({
+            "success": True,
+            "orders": items,
+            "total": pagination.total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": pagination.pages,
         })
-    return jsonify({
-        "success": True,
-        "orders": items,
-        "total": pagination.total,
-        "page": page,
-        "per_page": per_page,
-        "total_pages": pagination.pages,
-    })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "orders": [],
+            "total": 0,
+            "page": 1,
+            "per_page": 20,
+            "total_pages": 0,
+            "error": "Archivio non disponibile. Esegui l'inizializzazione del database (init_render_db.py).",
+        }), 200
 
 
 @app.route("/api/archivio/run-2025", methods=["POST"])
 @login_required
 def api_archivio_run_2025():
     """Esegue l'archivio ordini dalla cache corrente."""
-    from datetime import date as date_type
-    cutoff = date_type(2025, 12, 31)
-    orders = app.config.get("ORDERS_CACHE", [])
-    unique_seriali = {}
-    for o in orders:
-        seriale = o.get("seriale")
-        if not seriale:
-            continue
-        data_raw = o.get("data_ordine")
-        try:
-            if hasattr(data_raw, 'date'):
-                d = data_raw.date()
-            elif isinstance(data_raw, str):
-                d = None
-                for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y'):
-                    try:
-                        d = datetime.strptime(data_raw.split()[0], fmt).date()
-                        break
-                    except (ValueError, AttributeError):
-                        continue
-                if d is None:
-                    continue
-            else:
+    try:
+        from datetime import date as date_type
+        cutoff = date_type(2025, 12, 31)
+        orders = app.config.get("ORDERS_CACHE", [])
+        unique_seriali = {}
+        for o in orders:
+            seriale = o.get("seriale")
+            if not seriale:
                 continue
-            if d <= cutoff and seriale not in unique_seriali:
-                unique_seriali[seriale] = {
-                    "numero_ordine": o.get("numero_ordine"),
-                    "nome_cliente": o.get("nome_cliente") or o.get("cliente_codice"),
-                    "data_ordine": d,
-                }
-        except Exception:
-            continue
-
-    archived = 0
-    updated = 0
-    errors = []
-    with app.app_context():
-        for seriale, info in unique_seriali.items():
-            snapshot, data_ordine_date = _build_order_snapshot(seriale)
-            if snapshot is None:
-                errors.append(f"Ordine {seriale}: non in cache")
-                continue
+            data_raw = o.get("data_ordine")
             try:
-                rec = OrderArchive.query.filter_by(seriale=seriale).first()
-                if rec:
-                    rec.numero_ordine = info.get("numero_ordine")
-                    rec.data_ordine = info.get("data_ordine") or data_ordine_date
-                    rec.nome_cliente = info.get("nome_cliente")
-                    rec.snapshot = json.dumps(snapshot, ensure_ascii=False)
-                    db.session.commit()
-                    updated += 1
+                if hasattr(data_raw, 'date'):
+                    d = data_raw.date()
+                elif isinstance(data_raw, str):
+                    d = None
+                    for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y'):
+                        try:
+                            d = datetime.strptime(data_raw.split()[0], fmt).date()
+                            break
+                        except (ValueError, AttributeError):
+                            continue
+                    if d is None:
+                        continue
                 else:
-                    rec = OrderArchive(
-                        seriale=seriale,
-                        numero_ordine=info.get("numero_ordine"),
-                        data_ordine=info.get("data_ordine") or data_ordine_date,
-                        nome_cliente=info.get("nome_cliente"),
-                        snapshot=json.dumps(snapshot, ensure_ascii=False),
-                    )
-                    db.session.add(rec)
-                    db.session.commit()
-                    archived += 1
-            except Exception as e:
-                db.session.rollback()
-                errors.append(f"Ordine {seriale}: {e}")
-    return jsonify({
-        "success": True,
-        "archived": archived,
-        "updated": updated,
-        "total_candidates": len(unique_seriali),
-        "errors": errors[:20],
-    })
+                    continue
+                if d <= cutoff and seriale not in unique_seriali:
+                    unique_seriali[seriale] = {
+                        "numero_ordine": o.get("numero_ordine"),
+                        "nome_cliente": o.get("nome_cliente") or o.get("cliente_codice"),
+                        "data_ordine": d,
+                    }
+            except Exception:
+                continue
+
+        archived = 0
+        updated = 0
+        errors = []
+        with app.app_context():
+            for seriale, info in unique_seriali.items():
+                snapshot, data_ordine_date = _build_order_snapshot(seriale)
+                if snapshot is None:
+                    errors.append(f"Ordine {seriale}: non in cache")
+                    continue
+                try:
+                    rec = OrderArchive.query.filter_by(seriale=seriale).first()
+                    if rec:
+                        rec.numero_ordine = info.get("numero_ordine")
+                        rec.data_ordine = info.get("data_ordine") or data_ordine_date
+                        rec.nome_cliente = info.get("nome_cliente")
+                        rec.snapshot = json.dumps(snapshot, ensure_ascii=False)
+                        db.session.commit()
+                        updated += 1
+                    else:
+                        rec = OrderArchive(
+                            seriale=seriale,
+                            numero_ordine=info.get("numero_ordine"),
+                            data_ordine=info.get("data_ordine") or data_ordine_date,
+                            nome_cliente=info.get("nome_cliente"),
+                            snapshot=json.dumps(snapshot, ensure_ascii=False),
+                        )
+                        db.session.add(rec)
+                        db.session.commit()
+                        archived += 1
+                except Exception as e:
+                    db.session.rollback()
+                    errors.append(f"Ordine {seriale}: {e}")
+        return jsonify({
+            "success": True,
+            "archived": archived,
+            "updated": updated,
+            "total_candidates": len(unique_seriali),
+            "errors": errors[:20],
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "archived": 0,
+            "updated": 0,
+            "total_candidates": 0,
+            "errors": ["Archivio non disponibile. Esegui l'inizializzazione del database (init_render_db.py)."],
+        }), 200
 
 
 @app.route("/archivio-ordini/<seriale>")
