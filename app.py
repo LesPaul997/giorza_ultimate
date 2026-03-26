@@ -3591,8 +3591,61 @@ def refresh_reparti():
         # Commit delle modifiche
         db.session.commit()
         
-        # 5. Forza il refresh della cache degli ordini
-        refresh_orders()
+        # 5. Aggiorna rapidamente la cache ordini in memoria senza lanciare un refresh completo.
+        # Evita timeout del worker su Render mantenendo l'effetto immediato lato utente.
+        orders_cache = app.config.get("ORDERS_CACHE", [])
+        if orders_cache:
+            articolo_map = {}
+            for row in rows:
+                row_dict = dict(zip(headers, row))
+                codice = row_dict['codice_articolo'].strip() if row_dict['codice_articolo'] else ''
+                if not codice:
+                    continue
+                articolo_map[codice] = {
+                    "codice_reparto": row_dict['tipo_collo_1'].strip() if row_dict['tipo_collo_1'] else 'REP05',
+                    "unita_misura_2": row_dict['unita_misura_2'].strip() if row_dict['unita_misura_2'] else None,
+                    "operatore_conversione": row_dict['operatore_conversione'].strip() if row_dict['operatore_conversione'] else None,
+                    "fattore_conversione": (
+                        float(row_dict['fattore_conversione'])
+                        if row_dict['fattore_conversione'] and str(row_dict['fattore_conversione']).strip()
+                        else None
+                    ),
+                }
+
+            for order in orders_cache:
+                codice_articolo = (order.get("codice_articolo") or "").strip()
+                articolo = articolo_map.get(codice_articolo)
+                if not articolo:
+                    order["codice_reparto"] = 'REP05'
+                    order["unita_misura_2"] = None
+                    order["quantita_um2"] = None
+                    order["operatore_conversione"] = None
+                    order["fattore_conversione"] = None
+                    continue
+
+                order["codice_reparto"] = articolo["codice_reparto"] or 'REP05'
+                order["unita_misura_2"] = articolo["unita_misura_2"]
+                order["operatore_conversione"] = articolo["operatore_conversione"]
+                order["fattore_conversione"] = articolo["fattore_conversione"]
+
+                if (
+                    articolo["unita_misura_2"]
+                    and articolo["operatore_conversione"]
+                    and articolo["fattore_conversione"]
+                    and order.get("quantita") is not None
+                ):
+                    try:
+                        if articolo["operatore_conversione"] == "/":
+                            quantita_convertita = order["quantita"] / articolo["fattore_conversione"]
+                        elif articolo["operatore_conversione"] == "*":
+                            quantita_convertita = order["quantita"] * articolo["fattore_conversione"]
+                        else:
+                            quantita_convertita = None
+                        order["quantita_um2"] = round(quantita_convertita, 3) if quantita_convertita is not None else None
+                    except (TypeError, ZeroDivisionError):
+                        order["quantita_um2"] = None
+                else:
+                    order["quantita_um2"] = None
         
         return jsonify({
             "success": True,
